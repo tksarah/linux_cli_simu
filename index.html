@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Linux CLI 学習シミュレータ</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="terminal-area" aria-label="学生用CLIシミュレータ">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Browser-only simulator</p>
+            <h1>Linux CLI 学習シミュレータ</h1>
+          </div>
+          <div class="session-status" id="sessionStatus">未ログイン</div>
+        </header>
+
+        <section class="student-import" id="studentDropzone">
+          <div>
+            <p class="eyebrow">Lesson file</p>
+            <h2>講師から配布された教材ファイルを読み込む</h2>
+            <p class="import-copy">Teamsなどで配布された教材ファイルを選択してください。今日の練習内容が表示されます。</p>
+          </div>
+          <label class="import-button">
+            <input type="file" id="studentScenarioFile" accept="application/json,.json">
+            教材ファイルを選択
+          </label>
+          <div class="load-status" id="scenarioLoadStatus">教材ファイルはまだ読み込まれていません</div>
+        </section>
+
+        <section class="task-panel" aria-label="現在の課題">
+          <div>
+            <p class="eyebrow">Current tasks</p>
+            <h2>現在の課題</h2>
+          </div>
+          <ol class="task-list" id="taskList"></ol>
+          <div class="completion-status" id="scenarioCompleteStatus">課題を進めてください</div>
+          <button type="button" class="next-button" id="nextScenarioButton" disabled>次のシナリオへ</button>
+        </section>
+
+        <div class="terminal-frame" id="terminalFrame">
+          <div class="terminal-toolbar">
+            <span></span>
+            <span></span>
+            <span></span>
+            <strong>student@simulator</strong>
+          </div>
+          <div class="terminal-output" id="terminalOutput" role="log" aria-live="polite"></div>
+          <form class="command-line" id="commandForm" autocomplete="off">
+            <label id="promptLabel" for="commandInput">$</label>
+            <input id="commandInput" name="command" spellcheck="false" autofocus>
+          </form>
+        </div>
+
+        <div class="student-actions">
+          <button type="button" class="primary-button" id="resetButton">環境をリセット</button>
+          <button type="button" id="openAdminButton">講師管理</button>
+        </div>
+      </section>
+
+      <aside class="scenario-panel" aria-label="シナリオ一覧">
+        <div class="panel-header">
+          <p class="eyebrow">Scenarios</p>
+          <h2>シナリオ</h2>
+        </div>
+        <section class="control-block">
+          <div class="segmented" id="scenarioButtons" role="tablist" aria-label="シナリオ"></div>
+        </section>
+      </aside>
+    </main>
+
+    <dialog class="password-dialog" id="adminPasswordDialog">
+      <form method="dialog" class="password-form" id="adminPasswordForm">
+        <div>
+          <p class="eyebrow">Instructor</p>
+          <h2>講師管理画面</h2>
+          <p class="note">講師用パスワードを入力してください。</p>
+        </div>
+        <label>
+          パスワード
+          <input type="password" id="adminPasswordInput" autocomplete="off">
+        </label>
+        <p class="form-error" id="adminPasswordError"></p>
+        <div class="dialog-actions">
+          <button type="button" id="cancelAdminLogin">キャンセル</button>
+          <button type="submit" class="primary-button">開く</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="password-dialog" id="adminHelpDialog">
+      <div class="password-form">
+        <div>
+          <p class="eyebrow">Help</p>
+          <h2>講師向けヘルプ</h2>
+          <p class="note">授業でよく使うコマンド例です。学生に見せたいコマンド一覧の確認にも使えます。</p>
+        </div>
+        <pre id="adminHelpContent"></pre>
+        <div class="dialog-actions">
+          <button type="button" id="closeAdminHelp" class="primary-button">閉じる</button>
+        </div>
+      </div>
+    </dialog>
+
+    <section class="admin-screen" id="adminScreen" hidden>
+      <header class="admin-header">
+        <div>
+          <p class="eyebrow">Instructor admin</p>
+          <h1>シナリオJSON作成</h1>
+        </div>
+        <div class="admin-header-actions">
+          <button type="button" id="helpButton">ヘルプ表示</button>
+          <button type="button" id="closeAdminButton">実習画面へ戻る</button>
+        </div>
+      </header>
+
+      <main class="admin-layout">
+        <form class="admin-editor" id="adminScenarioForm">
+          <label>
+            授業名
+            <input id="adminLessonTitle" placeholder="例: 第2回 ファイル操作">
+          </label>
+          <label>
+            シナリオ名
+            <input id="adminScenarioLabel" placeholder="例: ディレクトリ作成">
+          </label>
+          <label>
+            学生が実行するコマンド
+            <textarea id="adminCommandList" rows="12" spellcheck="false" placeholder="1行に1コマンドずつ入力します">mkdir practice
+touch practice/report.txt
+echo done > practice/report.txt
+cat practice/report.txt</textarea>
+          </label>
+          <p class="note">許可コマンドと厳密判定用の期待状態は、入力されたコマンドから自動生成されます。</p>
+          <div class="admin-actions">
+            <button type="submit" class="primary-button">シナリオを追加</button>
+            <button type="button" id="downloadScenarioJson">JSONをダウンロード</button>
+          </div>
+          <p class="form-error" id="adminScenarioError"></p>
+        </form>
+
+        <section class="admin-preview">
+          <div>
+            <p class="eyebrow">Preview</p>
+            <h2>作成中のJSON</h2>
+          </div>
+          <pre id="adminJsonPreview"></pre>
+        </section>
+      </main>
+    </section>
+
+    <script src="app.js?v=20260504-3"></script>
+  </body>
+</html>
