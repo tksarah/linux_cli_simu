@@ -35,7 +35,7 @@ const commandCatalog = [
   "ssh", "pwd", "ls", "cd", "cat", "mkdir", "touch", "rm",
   "cp", "mv", "echo", "clear", "help", "whoami", "exit"
 ];
-const INSTRUCTOR_PASSWORD = "linux";
+const INSTRUCTOR_PASSWORD = "linux123";
 const adminPackage = {
   lessonTitle: "",
   scenarios: []
@@ -50,8 +50,8 @@ const scenarios = {
     allowed: ["ssh", "help", "clear"],
     tasks: [
       { text: "ssh student@linux-practice を実行する", command: "ssh student@linux-practice", expect: { pendingPassword: true } },
-      { text: "パスワード linux を入力する", command: "linux", expect: { loggedIn: true, user: "student", host: "linux-practice" } },
-      { text: "ログイン後のプロンプトを確認する", command: "linux", expect: { loggedIn: true, cwd: "/home/student" } }
+      { text: "パスワード linux123 を入力する", command: "linux123", expect: { loggedIn: true, user: "student", host: "linux-practice" } },
+      { text: "ログイン後のプロンプトを確認する", command: "linux123", expect: { loggedIn: true, cwd: "/home/student" } }
     ]
   },
   basics: {
@@ -388,14 +388,14 @@ function runSsh(args) {
 }
 
 function completePassword(input) {
-  if (input === "linux") {
+  if (input === "linux123") {
     const before = snapshotState();
     state.loggedIn = true;
     state.user = "student";
     state.host = "linux-practice";
     pendingPasswordFor = null;
     printLine("Welcome to Linux CLI practice.", "success");
-    markTasks("linux", { command: "password", args: [], raw: "linux" }, before);
+    markTasks("linux123", { command: "password", args: [], raw: "linux123" }, before);
     setPrompt();
     return;
   }
@@ -573,7 +573,7 @@ function createScenarioKey(label) {
 
 function inferCommandFromText(text) {
   const trimmed = normalizeSpaces(text);
-  if (trimmed.includes("パスワード linux")) return "linux";
+  if (trimmed.includes("パスワード linux123")) return "linux123";
   const escaped = commandCatalog.join("|");
   const match = trimmed.match(new RegExp(`\\b(${escaped})\\b(?:\\s+[^でをの]+)?`));
   return match ? normalizeSpaces(match[0]) : "";
