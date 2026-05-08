@@ -288,7 +288,7 @@ function setPrompt() {
   const symbol = state.user === "root" ? "#" : "$";
   promptLabel.textContent = state.loggedIn
     ? `${state.user}@${state.host}:${shortPath(state.cwd)}${symbol}`
-    : "local$";
+    : "local > ";
   updateSessionStatus();
 }
 
