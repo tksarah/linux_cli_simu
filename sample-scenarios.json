@@ -3,7 +3,7 @@
   "scenarios": [
     {
       "label": "SSHログイン",
-      "allowed": ["ssh", "help", "clear"],
+      "allowed": ["ssh", "help", "clear", "whoami", "pwd", "ls", "hostname"],
       "tasks": [
         {
           "text": "ssh student@linux-practice を実行する",
@@ -24,6 +24,26 @@
           "text": "ログイン後のプロンプトを確認する",
           "command": "linux",
           "expect": { "loggedIn": true, "cwd": "/home/student" }
+        },
+        {
+          "text": "whoami を実行してログインユーザーが student であることを確認する",
+          "command": "whoami",
+          "expect": { "loggedIn": true, "user": "student" }
+        },
+        {
+          "text": "pwd を実行して現在地が /home/student であることを確認する",
+          "command": "pwd",
+          "expect": { "loggedIn": true, "cwd": "/home/student" }
+        },
+        {
+          "text": "ls -la を実行してホームディレクトリの一覧を表示する",
+          "command": "ls -la",
+          "expect": { "exists": "/home/student", "type": "dir" }
+        },
+        {
+          "text": "hostname を実行して接続先が linux-practice であることを確認する",
+          "command": "hostname",
+          "expect": { "loggedIn": true, "host": "linux-practice" }
         }
       ]
     },

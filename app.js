@@ -33,7 +33,7 @@ const scenarioLoadStatus = document.querySelector("#scenarioLoadStatus");
 
 const commandCatalog = [
   "ssh", "pwd", "ls", "cd", "cat", "mkdir", "touch", "rm",
-  "cp", "mv", "echo", "clear", "help", "whoami", "exit"
+  "cp", "mv", "echo", "clear", "help", "whoami", "hostname", "exit"
 ];
 const INSTRUCTOR_PASSWORD = "linux123";
 const SSH_TARGET = "student@linux-practice";
@@ -51,12 +51,16 @@ const adminPackage = {
 const scenarios = {
   login: {
     label: "SSHログイン",
-    allowed: ["ssh", "help", "clear"],
+    allowed: ["ssh", "help", "clear", "whoami", "pwd", "ls", "hostname"],
     tasks: [
       { text: "ssh student@linux-practice を実行する", command: "ssh student@linux-practice", expect: { pendingHostKeyConfirmation: true } },
       { text: "yes と入力して接続を続ける", command: "yes", expect: { pendingPassword: true } },
       { text: "パスワード linux を入力する", command: "linux", expect: { loggedIn: true, user: "student", host: "linux-practice" } },
-      { text: "ログイン後のプロンプトを確認する", command: "linux", expect: { loggedIn: true, cwd: "/home/student" } }
+      { text: "ログイン後のプロンプトを確認する", command: "linux", expect: { loggedIn: true, cwd: "/home/student" } },
+      { text: "whoami を実行してログインユーザーが student であることを確認する", command: "whoami", expect: { loggedIn: true, user: "student" } },
+      { text: "pwd を実行して現在地が /home/student であることを確認する", command: "pwd", expect: { loggedIn: true, cwd: "/home/student" } },
+      { text: "ls -la を実行してホームディレクトリの一覧を表示する", command: "ls -la", expect: { exists: "/home/student", type: "dir" } },
+      { text: "hostname を実行して接続先が linux-practice であることを確認する", command: "hostname", expect: { loggedIn: true, host: "linux-practice" } }
     ]
   },
   basics: {
@@ -371,6 +375,7 @@ function execute(parsed) {
     case "mv": return runMv(args);
     case "echo": return runEcho(args);
     case "whoami": return printLine(state.user);
+    case "hostname": return printLine(state.host);
     case "exit": return runExit();
     case "clear":
       terminalOutput.textContent = "";
@@ -648,8 +653,10 @@ function showHelp() {
   printBlock([
     "使用例:",
     "  ssh student@linux-practice",
+    "  whoami",
     "  pwd",
-    "  ls",
+    "  ls -la",
+    "  hostname",
     "  cd documents",
     "  cat memo.txt",
     "  mkdir practice",
@@ -764,10 +771,14 @@ function buildTaskText(command) {
   switch (parsed.command) {
     case "ssh":
       return `${command} を実行する`;
+    case "whoami":
+      return "whoami でログインユーザーを確認する";
     case "pwd":
       return "pwd で現在地を確認する";
     case "ls":
       return `${command} で一覧を確認する`;
+    case "hostname":
+      return "hostname で接続先ホスト名を確認する";
     case "cd":
       return `${command} で移動する`;
     case "cat":
@@ -838,6 +849,8 @@ function buildExpectForCommand(command, context) {
     }
     case "whoami":
       return { loggedIn: true, user: "student" };
+    case "hostname":
+      return { loggedIn: true, host: "linux-practice" };
     default:
       return {};
   }
@@ -879,6 +892,26 @@ function buildTasksFromCommandList(text) {
           text: "ログイン後のプロンプトを確認する",
           command: SSH_PASSWORD,
           expect: { loggedIn: true, cwd: "/home/student" }
+        },
+        {
+          text: "whoami を実行してログインユーザーが student であることを確認する",
+          command: "whoami",
+          expect: { loggedIn: true, user: "student" }
+        },
+        {
+          text: "pwd を実行して現在地が /home/student であることを確認する",
+          command: "pwd",
+          expect: { loggedIn: true, cwd: "/home/student" }
+        },
+        {
+          text: "ls -la を実行してホームディレクトリの一覧を表示する",
+          command: "ls -la",
+          expect: { exists: "/home/student", type: "dir" }
+        },
+        {
+          text: "hostname を実行して接続先が linux-practice であることを確認する",
+          command: "hostname",
+          expect: { loggedIn: true, host: "linux-practice" }
         }
       ];
     }
@@ -1169,6 +1202,7 @@ function execute(parsed) {
     case "sed": return runSed(args);
     case "awk": return runAwk(args);
     case "whoami": return printLine(state.user);
+    case "hostname": return printLine(state.host);
     case "exit": return runExit();
     case "clear": terminalOutput.textContent = ""; return;
     case "help": return showHelp();
@@ -1443,6 +1477,7 @@ function validateExpectForExtendedCommands(expect, parsed, before) {
     case "ls": return !!state.fs[normalizePath(values[0] || before.cwd, before.cwd)];
     case "pwd":
     case "whoami":
+    case "hostname":
     case "help":
     case "clear":
     case "date":
@@ -1635,6 +1670,10 @@ resetButton.addEventListener("click", () => {
 function buildHelpText() {
   return [
     "使用例:",
+    "  whoami",
+    "  pwd",
+    "  ls -la",
+    "  hostname",
     "  ls -l",
     "  ls -t",
     "  ls -r documents",
@@ -1729,6 +1768,7 @@ downloadScenarioJson.addEventListener("click", () => {
 function boot() {
   printLine("Linux CLI 学習シミュレータを起動しました。", "system");
   printLine("講師から配布された教材ファイルがある場合は、画面上部で読み込んでください。", "system");
+  printLine("SSH演習の前提: ログインユーザーは student、接続先の Linux マシンは linux-practice です。", "system");
   printLine("接続練習: ssh student@linux-practice", "system");
   printLine("パスワード: linux", "system");
   setPrompt();

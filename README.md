@@ -12,6 +12,11 @@
 
 最初のSSH練習:
 
+前提:
+
+- ログインユーザーは `student` です。
+- 接続先のリモート Linux マシンは `linux-practice` です。
+
 ```text
 ssh student@linux-practice
 ```
@@ -29,6 +34,15 @@ linux
 ```
 
 初回接続時は host key fingerprint を表示し、yes/no の確認後にパスワード入力へ進みます。同じページ内で一度接続確認を通過したあとは、次回の ssh で password 入力へ直接進みます。誤ったパスワードは 3 回まで再試行できます。
+
+SSH ログイン課題では、ログイン後に次の確認コマンドも実行します。
+
+```text
+whoami
+pwd
+ls -la
+hostname
+```
 
 ## 講師の授業準備
 
@@ -99,7 +113,7 @@ cat practice/report.txt
 ## 利用できるコマンド
 
 ```text
-ssh pwd ls cd cat mkdir touch rm cp mv echo head tail grep wc date find sed awk clear help whoami exit
+ssh pwd ls cd cat mkdir touch rm cp mv echo head tail grep wc date find sed awk clear help whoami hostname exit
 ```
 
 主な対応オプション:
