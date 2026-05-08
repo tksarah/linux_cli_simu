@@ -36,6 +36,10 @@ const commandCatalog = [
   "cp", "mv", "echo", "clear", "help", "whoami", "exit"
 ];
 const INSTRUCTOR_PASSWORD = "linux123";
+const SSH_TARGET = "student@linux-practice";
+const SSH_PASSWORD = "linux";
+const SSH_MAX_PASSWORD_ATTEMPTS = 3;
+const SSH_HOST_FINGERPRINT = "SHA256:Q8i7MZ0P1nV4m0sB8xJ9cL2rW5kT6yH3dF1pN7aS4eU";
 const adminPackage = {
   lessonTitle: "",
   scenarios: []
@@ -49,7 +53,8 @@ const scenarios = {
     label: "SSHログイン",
     allowed: ["ssh", "help", "clear"],
     tasks: [
-      { text: "ssh student@linux-practice を実行する", command: "ssh student@linux-practice", expect: { pendingPassword: true } },
+      { text: "ssh student@linux-practice を実行する", command: "ssh student@linux-practice", expect: { pendingHostKeyConfirmation: true } },
+      { text: "yes と入力して接続を続ける", command: "yes", expect: { pendingPassword: true } },
       { text: "パスワード linux を入力する", command: "linux", expect: { loggedIn: true, user: "student", host: "linux-practice" } },
       { text: "ログイン後のプロンプトを確認する", command: "linux", expect: { loggedIn: true, cwd: "/home/student" } }
     ]
@@ -157,8 +162,81 @@ let allowedCommands = new Set(scenarios[activeScenarioKey].allowed);
 let commandHistory = [];
 let historyIndex = 0;
 let pendingPasswordFor = null;
+let pendingHostKeyFor = null;
+let sshPasswordAttemptsRemaining = 0;
+const knownHosts = new Set();
 let customScenarioCount = 0;
 const completedTasks = new Map();
+
+function isAwaitingPassword() {
+  return pendingPasswordFor !== null;
+}
+
+function isAwaitingHostKeyConfirmation() {
+  return pendingHostKeyFor !== null;
+}
+
+function isInSshDialogue() {
+  return isAwaitingPassword() || isAwaitingHostKeyConfirmation();
+}
+
+function resetSshAuthState() {
+  pendingPasswordFor = null;
+  pendingHostKeyFor = null;
+  sshPasswordAttemptsRemaining = 0;
+}
+
+function updateSessionStatus() {
+  sessionStatus.textContent = state.loggedIn ? `${state.user}@${state.host}` : "未ログイン";
+  sessionStatus.classList.toggle("is-live", state.loggedIn);
+}
+
+function beginPasswordPrompt(target, preserveAttempts = false) {
+  pendingHostKeyFor = null;
+  pendingPasswordFor = target;
+  if (!preserveAttempts || sshPasswordAttemptsRemaining <= 0) {
+    sshPasswordAttemptsRemaining = SSH_MAX_PASSWORD_ATTEMPTS;
+  }
+  printLine(`${target}'s password:`, "system");
+}
+
+function finishSshLogin() {
+  state.loggedIn = true;
+  state.user = "student";
+  state.host = "linux-practice";
+  state.cwd = "/home/student";
+  resetSshAuthState();
+}
+
+function showHostKeyPrompt(target) {
+  const host = target.split("@")[1] || "linux-practice";
+  printBlock([
+    `The authenticity of host '${host}' can't be established.`,
+    `ED25519 key fingerprint is ${SSH_HOST_FINGERPRINT}.`,
+    "Are you sure you want to continue connecting (yes/no)?"
+  ].join("\n"), "system");
+}
+
+function handleHostKeyConfirmation(input) {
+  const normalized = input.toLowerCase();
+  if (normalized === "yes") {
+    const target = pendingHostKeyFor;
+    const before = snapshotState();
+    knownHosts.add(target);
+    printLine("Warning: Permanently added 'linux-practice' (ED25519) to the list of known hosts.", "system");
+    beginPasswordPrompt(target);
+    markTasks("yes", { command: "response", args: [], raw: "yes" }, before);
+    setPrompt();
+    return;
+  }
+  if (normalized === "no") {
+    resetSshAuthState();
+    printLine("Host key verification failed.", "error");
+    setPrompt();
+    return;
+  }
+  printLine("Please type 'yes' or 'no'.", "error");
+}
 
 function printLine(text = "", type = "") {
   const line = document.createElement("div");
@@ -173,9 +251,10 @@ function printBlock(text, type = "") {
 }
 
 function setPrompt() {
-  if (pendingPasswordFor) {
+  if (isAwaitingPassword()) {
     promptLabel.textContent = "password:";
     commandInput.type = "password";
+    updateSessionStatus();
     return;
   }
 
@@ -184,8 +263,7 @@ function setPrompt() {
   promptLabel.textContent = state.loggedIn
     ? `${state.user}@${state.host}:${shortPath(state.cwd)}${symbol}`
     : "local$";
-  sessionStatus.textContent = state.loggedIn ? `${state.user}@${state.host}` : "未ログイン";
-  sessionStatus.classList.toggle("is-live", state.loggedIn);
+  updateSessionStatus();
 }
 
 function shortPath(path) {
@@ -226,7 +304,10 @@ function snapshotState() {
     host: state.host,
     cwd: state.cwd,
     fs: structuredClone(state.fs),
-    pendingPasswordFor
+    pendingPasswordFor,
+    pendingHostKeyFor,
+    sshPasswordAttemptsRemaining,
+    knownHosts: [...knownHosts]
   };
 }
 
@@ -382,25 +463,35 @@ function validateExpect(expect, parsed, before) {
 function runSsh(args) {
   const target = args[0];
   if (state.loggedIn) throw new Error("すでにログインしています。exit でログアウトできます");
-  if (target !== "student@linux-practice") throw new Error("接続先は student@linux-practice を指定してください");
-  pendingPasswordFor = target;
-  printLine("student@linux-practice's password:", "system");
+  if (target !== SSH_TARGET) throw new Error(`接続先は ${SSH_TARGET} を指定してください`);
+  resetSshAuthState();
+  if (!knownHosts.has(target)) {
+    pendingHostKeyFor = target;
+    showHostKeyPrompt(target);
+    return;
+  }
+  beginPasswordPrompt(target);
 }
 
 function completePassword(input) {
-  if (input === "linux") {
+  if (input === SSH_PASSWORD) {
     const before = snapshotState();
-    state.loggedIn = true;
-    state.user = "student";
-    state.host = "linux-practice";
-    pendingPasswordFor = null;
+    finishSshLogin();
     printLine("Welcome to Linux CLI practice.", "success");
-    markTasks("linux", { command: "password", args: [], raw: "linux" }, before);
+    markTasks(SSH_PASSWORD, { command: "password", args: [], raw: SSH_PASSWORD }, before);
     setPrompt();
     return;
   }
-  pendingPasswordFor = null;
-  printLine("Permission denied, please try again.", "error");
+  sshPasswordAttemptsRemaining -= 1;
+  if (sshPasswordAttemptsRemaining > 0) {
+    printLine("Permission denied, please try again.", "error");
+    beginPasswordPrompt(pendingPasswordFor, true);
+    setPrompt();
+    return;
+  }
+  const target = pendingPasswordFor;
+  resetSshAuthState();
+  printLine(`${target}: Permission denied (publickey,password).`, "error");
   setPrompt();
 }
 
@@ -548,6 +639,7 @@ function runExit() {
   state.user = "guest";
   state.host = "browser";
   state.cwd = "/home/student";
+  resetSshAuthState();
   setScenario("login");
   printLine("Connection to linux-practice closed.", "system");
 }
@@ -573,6 +665,7 @@ function createScenarioKey(label) {
 
 function inferCommandFromText(text) {
   const trimmed = normalizeSpaces(text);
+  if (trimmed.includes("yes と入力")) return "yes";
   if (trimmed.includes("パスワード linux")) return "linux";
   const escaped = commandCatalog.join("|");
   const match = trimmed.match(new RegExp(`\\b(${escaped})\\b(?:\\s+[^でをの]+)?`));
@@ -669,6 +762,8 @@ function downloadText(filename, text) {
 function buildTaskText(command) {
   const parsed = parseCommand(command);
   switch (parsed.command) {
+    case "ssh":
+      return `${command} を実行する`;
     case "pwd":
       return "pwd で現在地を確認する";
     case "ls":
@@ -692,6 +787,8 @@ function buildExpectForCommand(command, context) {
   const parsed = parseCommand(command);
   const base = context.cwd;
   switch (parsed.command) {
+    case "ssh":
+      return { pendingHostKeyConfirmation: true };
     case "pwd":
       return { cwd: base };
     case "ls":
@@ -757,9 +854,34 @@ function buildTasksFromCommandList(text) {
       "/home/student/documents/lesson.txt": "Today's goal: SSH login, pwd, cd, and cat.\n",
     }
   };
-  return commands.map((command) => {
+  return commands.flatMap((command) => {
     const parsed = parseCommand(command);
     if (!commandCatalog.includes(parsed.command)) throw new Error(`未対応のコマンドがあります: ${parsed.command}`);
+    if (parsed.command === "ssh") {
+      if (command !== SSH_TARGET) throw new Error(`SSH課題は ${SSH_TARGET} を指定してください`);
+      return [
+        {
+          text: buildTaskText(command),
+          command,
+          expect: { pendingHostKeyConfirmation: true }
+        },
+        {
+          text: "yes と入力して接続を続ける",
+          command: "yes",
+          expect: { pendingPassword: true }
+        },
+        {
+          text: `パスワード ${SSH_PASSWORD} を入力する`,
+          command: SSH_PASSWORD,
+          expect: { loggedIn: true, user: "student", host: "linux-practice" }
+        },
+        {
+          text: "ログイン後のプロンプトを確認する",
+          command: SSH_PASSWORD,
+          expect: { loggedIn: true, cwd: "/home/student" }
+        }
+      ];
+    }
     return {
       text: buildTaskText(command),
       command,
@@ -1115,13 +1237,13 @@ function setScenario(key) {
     state.user = "guest";
     state.host = "browser";
     state.cwd = "/home/student";
-    pendingPasswordFor = null;
+    resetSshAuthState();
   } else if (!state.loggedIn) {
     state.loggedIn = true;
     state.user = "student";
     state.host = "linux-practice";
     state.cwd = "/home/student";
-    pendingPasswordFor = null;
+    resetSshAuthState();
   }
   setPrompt();
   renderControls();
@@ -1275,7 +1397,8 @@ function validateExpectForExtendedCommands(expect, parsed, before) {
   if (expect.user && state.user !== expect.user) return false;
   if (expect.host && state.host !== expect.host) return false;
   if (expect.cwd && state.cwd !== expect.cwd) return false;
-  if (expect.pendingPassword && pendingPasswordFor !== "student@linux-practice") return false;
+  if (expect.pendingPassword && pendingPasswordFor !== SSH_TARGET) return false;
+  if (expect.pendingHostKeyConfirmation && pendingHostKeyFor !== SSH_TARGET) return false;
   if (expect.exists && !nodeMatches(expect.exists, expect.type)) return false;
   if (expect.notExists && state.fs[expect.notExists]) return false;
   if (expect.file) {
@@ -1287,7 +1410,8 @@ function validateExpectForExtendedCommands(expect, parsed, before) {
 
   const { values } = splitOptions(parsed.args || []);
   switch (parsed.command) {
-    case "ssh": return pendingPasswordFor === "student@linux-practice";
+    case "ssh": return pendingHostKeyFor === SSH_TARGET || pendingPasswordFor === SSH_TARGET;
+    case "response": return pendingPasswordFor === SSH_TARGET;
     case "password": return state.loggedIn && state.user === "student" && state.host === "linux-practice";
     case "cd": return state.cwd === normalizePath(values[0] || "/home/student", before.cwd);
     case "mkdir": return values.every((arg) => nodeMatches(normalizePath(arg, before.cwd), "dir"));
@@ -1345,16 +1469,20 @@ commandForm.addEventListener("submit", (event) => {
   const input = commandInput.value.trim();
   if (!input) return;
 
-  if (!pendingPasswordFor) {
+  if (!isInSshDialogue()) {
     printLine(`${promptLabel.textContent} ${input}`);
     commandHistory.push(input);
     historyIndex = commandHistory.length;
+  } else if (isAwaitingHostKeyConfirmation()) {
+    printLine(input);
   }
 
   commandInput.value = "";
 
   try {
-    if (pendingPasswordFor) {
+    if (isAwaitingHostKeyConfirmation()) {
+      handleHostKeyConfirmation(input);
+    } else if (isAwaitingPassword()) {
       completePassword(input);
     } else {
       const parsed = parseCommand(input);
@@ -1401,7 +1529,7 @@ function replaceCurrentToken(input, replacement) {
 }
 
 function completeCommandInput() {
-  if (pendingPasswordFor) return;
+  if (isInSshDialogue()) return;
 
   const input = commandInput.value;
   const normalized = input.replace(/\s+$/, (match) => match);
@@ -1494,7 +1622,8 @@ nextScenarioButton.addEventListener("click", () => {
 
 resetButton.addEventListener("click", () => {
   state = createInitialState();
-  pendingPasswordFor = null;
+  resetSshAuthState();
+  knownHosts.clear();
   commandHistory = [];
   historyIndex = 0;
   completedTasks.clear();

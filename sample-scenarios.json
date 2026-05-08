@@ -2,6 +2,32 @@
   "lessonTitle": "第1回 Linux基本操作",
   "scenarios": [
     {
+      "label": "SSHログイン",
+      "allowed": ["ssh", "help", "clear"],
+      "tasks": [
+        {
+          "text": "ssh student@linux-practice を実行する",
+          "command": "ssh student@linux-practice",
+          "expect": { "pendingHostKeyConfirmation": true }
+        },
+        {
+          "text": "yes と入力して接続を続ける",
+          "command": "yes",
+          "expect": { "pendingPassword": true }
+        },
+        {
+          "text": "パスワード linux を入力する",
+          "command": "linux",
+          "expect": { "loggedIn": true, "user": "student", "host": "linux-practice" }
+        },
+        {
+          "text": "ログイン後のプロンプトを確認する",
+          "command": "linux",
+          "expect": { "loggedIn": true, "cwd": "/home/student" }
+        }
+      ]
+    },
+    {
       "label": "パス操作",
       "allowed": ["pwd", "ls", "cd", "cat", "help", "clear", "whoami", "exit"],
       "tasks": [

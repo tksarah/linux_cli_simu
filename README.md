@@ -16,11 +16,19 @@
 ssh student@linux-practice
 ```
 
+初回接続時の確認:
+
+```text
+yes
+```
+
 パスワード:
 
 ```text
 linux
 ```
+
+初回接続時は host key fingerprint を表示し、yes/no の確認後にパスワード入力へ進みます。同じページ内で一度接続確認を通過したあとは、次回の ssh で password 入力へ直接進みます。誤ったパスワードは 3 回まで再試行できます。
 
 ## 講師の授業準備
 
@@ -32,7 +40,10 @@ linux
 
 管理画面では、講師が次のようにコマンドを並べるだけで、許可コマンド、課題文、厳密判定用の `expect` が自動生成されます。
 
+SSH 課題で `ssh student@linux-practice` を含めた場合は、教材生成時に yes 確認、パスワード入力、ログイン後プロンプト確認まで自動展開されます。
+
 ```text
+ssh student@linux-practice
 mkdir practice
 touch practice/report.txt
 echo done > practice/report.txt
@@ -80,6 +91,8 @@ cat practice/report.txt
 - `expect.content`: `file` の内容です。末尾改行も含めて一致確認します。
 - `expect.notExists`: 実行後に存在してはいけないパスです。
 - `expect.loggedIn`: SSHログイン状態です。
+- `expect.pendingHostKeyConfirmation`: host key 確認待ち状態です。
+- `expect.pendingPassword`: パスワード入力待ち状態です。
 
 課題は「コマンドがエラーなく実行されたこと」と「期待状態が成立したこと」の両方を満たしたときだけ完了になります。
 
@@ -111,4 +124,5 @@ ssh pwd ls cd cat mkdir touch rm cp mv echo head tail grep wc date find sed awk 
 - `localStorage`、Cookie、IndexedDBは使わず、操作状態はメモリ内だけで保持します。
 - 実際のOSコマンドは実行せず、安全な疑似ファイルシステム上で練習します。
 - 授業JSONは読み込み時だけブラウザのメモリに展開されます。
-- 「環境をリセット」は端末環境を初期化します。読み込んだ授業JSONも消したい場合はページを再読み込みします。
+- SSH の known hosts 相当の情報もメモリ内だけで保持します。
+- 「環境をリセット」は端末環境と SSH 接続履歴を初期化します。読み込んだ授業JSONも消したい場合はページを再読み込みします。
