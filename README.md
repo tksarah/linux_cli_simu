@@ -19,7 +19,7 @@ ssh student@linux-practice
 パスワード:
 
 ```text
-linux123
+linux
 ```
 
 ## 講師の授業準備
