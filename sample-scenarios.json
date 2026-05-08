@@ -3,7 +3,7 @@
   "scenarios": [
     {
       "label": "SSHログイン",
-      "allowed": ["ssh", "help", "clear", "whoami", "pwd", "ls", "hostname"],
+      "allowed": ["ssh", "help", "clear"],
       "tasks": [
         {
           "text": "ssh student@linux-practice を実行する",
@@ -24,11 +24,22 @@
           "text": "ログイン後のプロンプトを確認する",
           "command": "linux",
           "expect": { "loggedIn": true, "cwd": "/home/student" }
-        },
+        }
+      ]
+    },
+    {
+      "label": "SSH後確認",
+      "allowed": ["whoami", "pwd", "ls", "help", "clear", "hostname", "exit"],
+      "tasks": [
         {
-          "text": "whoami を実行してログインユーザーが student であることを確認する",
+          "text": "whoami を実行してログインユーザーを確認する",
           "command": "whoami",
           "expect": { "loggedIn": true, "user": "student" }
+        },
+        {
+          "text": "hostname を実行して接続先ホスト名を確認する",
+          "command": "hostname",
+          "expect": { "loggedIn": true, "host": "linux-practice" }
         },
         {
           "text": "pwd を実行して現在地が /home/student であることを確認する",
@@ -36,14 +47,41 @@
           "expect": { "loggedIn": true, "cwd": "/home/student" }
         },
         {
-          "text": "ls -la を実行してホームディレクトリの一覧を表示する",
+          "text": "ls -la を実行してホームディレクトリの一覧を確認する",
           "command": "ls -la",
           "expect": { "exists": "/home/student", "type": "dir" }
+        }
+      ]
+    },
+    {
+      "label": "教材確認",
+      "allowed": ["pwd", "ls", "cd", "cat", "help", "clear", "whoami", "hostname", "exit"],
+      "tasks": [
+        {
+          "text": "cd documents で教材フォルダへ移動する",
+          "command": "cd documents",
+          "expect": { "cwd": "/home/student/documents" }
         },
         {
-          "text": "hostname を実行して接続先が linux-practice であることを確認する",
-          "command": "hostname",
-          "expect": { "loggedIn": true, "host": "linux-practice" }
+          "text": "ls で教材ファイルの一覧を確認する",
+          "command": "ls",
+          "expect": { "exists": "/home/student/documents", "type": "dir" }
+        },
+        {
+          "text": "cat lesson.txt で lesson.txt の内容を確認する",
+          "command": "cat lesson.txt",
+          "expect": { "file": "/home/student/documents/lesson.txt" }
+        }
+      ]
+    },
+    {
+      "label": "ログアウト",
+      "allowed": ["help", "clear", "exit"],
+      "tasks": [
+        {
+          "text": "exit を実行して SSH セッションを終了する",
+          "command": "exit",
+          "expect": { "loggedIn": false }
         }
       ]
     },

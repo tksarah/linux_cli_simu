@@ -51,16 +51,38 @@ const adminPackage = {
 const scenarios = {
   login: {
     label: "SSHログイン",
-    allowed: ["ssh", "help", "clear", "whoami", "pwd", "ls", "hostname"],
+    allowed: ["ssh", "help", "clear"],
     tasks: [
       { text: "ssh student@linux-practice を実行する", command: "ssh student@linux-practice", expect: { pendingHostKeyConfirmation: true } },
       { text: "yes と入力して接続を続ける", command: "yes", expect: { pendingPassword: true } },
       { text: "パスワード linux を入力する", command: "linux", expect: { loggedIn: true, user: "student", host: "linux-practice" } },
-      { text: "ログイン後のプロンプトを確認する", command: "linux", expect: { loggedIn: true, cwd: "/home/student" } },
-      { text: "whoami を実行してログインユーザーが student であることを確認する", command: "whoami", expect: { loggedIn: true, user: "student" } },
+      { text: "ログイン後のプロンプトを確認する", command: "linux", expect: { loggedIn: true, cwd: "/home/student" } }
+    ]
+  },
+  postLoginCheck: {
+    label: "SSH後確認",
+    allowed: ["whoami", "pwd", "ls", "help", "clear", "hostname", "exit"],
+    tasks: [
+      { text: "whoami を実行してログインユーザーを確認する", command: "whoami", expect: { loggedIn: true, user: "student" } },
+      { text: "hostname を実行して接続先ホスト名を確認する", command: "hostname", expect: { loggedIn: true, host: "linux-practice" } },
       { text: "pwd を実行して現在地が /home/student であることを確認する", command: "pwd", expect: { loggedIn: true, cwd: "/home/student" } },
-      { text: "ls -la を実行してホームディレクトリの一覧を表示する", command: "ls -la", expect: { exists: "/home/student", type: "dir" } },
-      { text: "hostname を実行して接続先が linux-practice であることを確認する", command: "hostname", expect: { loggedIn: true, host: "linux-practice" } }
+      { text: "ls -la を実行してホームディレクトリの一覧を確認する", command: "ls -la", expect: { exists: "/home/student", type: "dir" } }
+    ]
+  },
+  materialsCheck: {
+    label: "教材確認",
+    allowed: ["pwd", "ls", "cd", "cat", "help", "clear", "whoami", "hostname", "exit"],
+    tasks: [
+      { text: "cd documents で教材フォルダへ移動する", command: "cd documents", expect: { cwd: "/home/student/documents" } },
+      { text: "ls で教材ファイルの一覧を確認する", command: "ls", expect: { exists: "/home/student/documents", type: "dir" } },
+      { text: "cat lesson.txt で lesson.txt の内容を確認する", command: "cat lesson.txt", expect: { file: "/home/student/documents/lesson.txt" } }
+    ]
+  },
+  logout: {
+    label: "ログアウト",
+    allowed: ["help", "clear", "exit"],
+    tasks: [
+      { text: "exit を実行して SSH セッションを終了する", command: "exit", expect: { loggedIn: false } }
     ]
   },
   basics: {
@@ -645,7 +667,8 @@ function runExit() {
   state.host = "browser";
   state.cwd = "/home/student";
   resetSshAuthState();
-  setScenario("login");
+  setPrompt();
+  renderControls();
   printLine("Connection to linux-practice closed.", "system");
 }
 
@@ -892,26 +915,6 @@ function buildTasksFromCommandList(text) {
           text: "ログイン後のプロンプトを確認する",
           command: SSH_PASSWORD,
           expect: { loggedIn: true, cwd: "/home/student" }
-        },
-        {
-          text: "whoami を実行してログインユーザーが student であることを確認する",
-          command: "whoami",
-          expect: { loggedIn: true, user: "student" }
-        },
-        {
-          text: "pwd を実行して現在地が /home/student であることを確認する",
-          command: "pwd",
-          expect: { loggedIn: true, cwd: "/home/student" }
-        },
-        {
-          text: "ls -la を実行してホームディレクトリの一覧を表示する",
-          command: "ls -la",
-          expect: { exists: "/home/student", type: "dir" }
-        },
-        {
-          text: "hostname を実行して接続先が linux-practice であることを確認する",
-          command: "hostname",
-          expect: { loggedIn: true, host: "linux-practice" }
         }
       ];
     }
@@ -1524,6 +1527,7 @@ commandForm.addEventListener("submit", (event) => {
       const before = snapshotState();
       execute(parsed);
       markTasks(parsed.raw, parsed, before);
+      if (parsed.command === "exit") setScenario("login");
     }
   } catch (error) {
     printLine(error.message, "error");
