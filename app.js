@@ -33,7 +33,7 @@ const scenarioLoadStatus = document.querySelector("#scenarioLoadStatus");
 
 const commandCatalog = [
   "ssh", "pwd", "ls", "cd", "cat", "mkdir", "touch", "rm",
-  "cp", "mv", "echo", "clear", "help", "whoami", "hostname", "exit"
+  "cp", "mv", "echo", "more", "clear", "help", "whoami", "hostname", "exit"
 ];
 const INSTRUCTOR_PASSWORD = "linux123";
 const SSH_TARGET = "student@linux-practice";
@@ -162,19 +162,31 @@ function createInitialState() {
     host: "browser",
     cwd: "/home/student",
     fs: {
-      "/": createDirNode(["home", "etc", "var"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
-      "/home": createDirNode(["student"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
-      "/home/student": createDirNode(["documents", "readme.txt"], { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
+      "/": createDirNode(["home", "etc", "usr", "var"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/home": createDirNode(["student", "user01"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/home/student": createDirNode(["demo.txt", "documents", "readme.txt", "sample.txt", "sample_dir"], { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
+      "/home/user01": createDirNode([], { owner: "user01", group: "user01", mtime: RECENT_LS_MTIME }),
+      "/home/student/demo.txt": createFileNode("Demo file for cat and more practice.\nLine 2: Linux commands read files from the virtual filesystem.\n", { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
       "/home/student/readme.txt": createFileNode("Linux CLI practice environment.\n", { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
+      "/home/student/sample.txt": createFileNode("Temporary sample file.\n", { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
+      "/home/student/sample_dir": createDirNode(["note.txt"], { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
+      "/home/student/sample_dir/note.txt": createFileNode("Sample directory content.\n", { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
       "/home/student/documents": createDirNode(["lesson.txt", "memo.txt"], { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
       "/home/student/documents/memo.txt": createFileNode("Class memo: commands are typed as command plus target.\n", { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
       "/home/student/documents/lesson.txt": createFileNode("Today's goal: SSH login, pwd, cd, and cat.\n", { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
-      "/etc": createDirNode(["binfmt.d", "gss", "hostname", "netplan", "opt"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/etc": createDirNode(["binfmt.d", "gss", "hostname", "hosts", "netplan", "opt"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
       "/etc/binfmt.d": createDirNode([], { owner: "root", group: "root", mtime: new Date("2022-04-08T00:00:00Z") }),
       "/etc/gss": createDirNode([], { owner: "root", group: "root", mtime: new Date("2022-02-22T00:00:00Z") }),
       "/etc/netplan": createDirNode([], { owner: "root", group: "root", mtime: new Date("2022-03-10T00:00:00Z") }),
       "/etc/opt": createDirNode([], { owner: "root", group: "root", mtime: new Date("2023-02-11T00:00:00Z") }),
       "/etc/hostname": createFileNode("linux-practice\n", { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/etc/hosts": createFileNode("127.0.0.1 localhost\n127.0.1.1 linux-practice\n", { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/usr": createDirNode(["local"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/usr/local": createDirNode(["share"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/usr/local/share": createDirNode(["man", "practice.txt"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/usr/local/share/man": createDirNode(["intro.txt"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/usr/local/share/man/intro.txt": createFileNode("Manual page sample.\n", { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/usr/local/share/practice.txt": createFileNode("Shared practice material.\n", { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
       "/var": createDirNode(["log"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
       "/var/log": createDirNode(["practice.log"], { owner: "root", group: "root", mtime: RECENT_LS_MTIME }),
       "/var/log/practice.log": createFileNode("This is a simulated log file.\n", { owner: "root", group: "root", mtime: RECENT_LS_MTIME })
@@ -189,6 +201,7 @@ let commandHistory = [];
 let historyIndex = 0;
 let pendingPasswordFor = null;
 let pendingHostKeyFor = null;
+let pendingRmConfirmation = null;
 let sshPasswordAttemptsRemaining = 0;
 const knownHosts = new Set();
 let customScenarioCount = 0;
@@ -206,10 +219,28 @@ function isInSshDialogue() {
   return isAwaitingPassword() || isAwaitingHostKeyConfirmation();
 }
 
+function isAwaitingRmConfirmation() {
+  return pendingRmConfirmation !== null;
+}
+
+function isAwaitingInteractiveInput() {
+  return isInSshDialogue() || isAwaitingRmConfirmation();
+}
+
 function resetSshAuthState() {
   pendingPasswordFor = null;
   pendingHostKeyFor = null;
   sshPasswordAttemptsRemaining = 0;
+}
+
+function completeRmConfirmation(input) {
+  const pending = pendingRmConfirmation;
+  pendingRmConfirmation = null;
+  if (!pending) return null;
+  if (["y", "yes"].includes(input.toLowerCase())) {
+    removePathRecursive(pending.path, pending.recursive, pending.force);
+  }
+  return pending;
 }
 
 function updateSessionStatus() {
@@ -302,7 +333,10 @@ function normalizeSpaces(text) {
 
 function normalizePath(input, base = state.cwd) {
   if (!input || input === ".") return base;
-  const raw = input.startsWith("/") ? input : `${base}/${input}`;
+  let expanded = input;
+  if (expanded === "~") expanded = "/home/student";
+  else if (expanded.startsWith("~/")) expanded = `/home/student/${expanded.slice(2)}`;
+  const raw = expanded.startsWith("/") ? expanded : `${base}/${expanded}`;
   const parts = [];
   raw.split("/").forEach((part) => {
     if (!part || part === ".") return;
@@ -332,6 +366,7 @@ function snapshotState() {
     fs: structuredClone(state.fs),
     pendingPasswordFor,
     pendingHostKeyFor,
+    pendingRmConfirmation: structuredClone(pendingRmConfirmation),
     sshPasswordAttemptsRemaining,
     knownHosts: [...knownHosts]
   };
@@ -390,6 +425,7 @@ function execute(parsed) {
     case "ls": return runLs(args);
     case "cd": return runCd(args);
     case "cat": return runCat(args);
+    case "more": return runMore(args);
     case "mkdir": return runMkdir(args);
     case "touch": return runTouch(args);
     case "rm": return runRm(args);
@@ -453,6 +489,7 @@ function validateExpect(expect, parsed, before) {
     case "mv":
       return !state.fs[normalizePath(values[0], before.cwd)] && !!state.fs[normalizePath(values[1], before.cwd)];
     case "cat":
+    case "more":
     case "head":
     case "tail": {
       const fileArgs = values.length ? values : parsed.args.filter((arg) => !arg.startsWith("-") && !/^\d+$/.test(arg));
@@ -666,6 +703,7 @@ function runExit() {
   state.user = "guest";
   state.host = "browser";
   state.cwd = "/home/student";
+  pendingRmConfirmation = null;
   resetSshAuthState();
   setPrompt();
   renderControls();
@@ -682,9 +720,12 @@ function showHelp() {
     "  hostname",
     "  cd documents",
     "  cat memo.txt",
+    "  more demo.txt",
     "  mkdir practice",
     "  touch practice/note.txt",
-    "  echo hello > practice/note.txt"
+    "  echo hello > practice/note.txt",
+    "  cp /etc/hosts .",
+    "  rm -i sample.txt"
   ].join("\n"), "system");
 }
 
@@ -879,6 +920,104 @@ function buildExpectForCommand(command, context) {
   }
 }
 
+function buildTaskText(command) {
+  const parsed = parseCommand(command);
+  switch (parsed.command) {
+    case "ssh":
+      return `${command} を実行する`;
+    case "whoami":
+      return "whoami でログインユーザーを確認する";
+    case "pwd":
+      return "pwd で現在地を確認する";
+    case "ls":
+      return `${command} で一覧を確認する`;
+    case "hostname":
+      return "hostname で接続先ホスト名を確認する";
+    case "cd":
+      return `${command} で移動する`;
+    case "cat":
+    case "more":
+      return `${command} で内容を確認する`;
+    case "mkdir":
+      return `${command} でディレクトリを作る`;
+    case "touch":
+      return `${command} でファイルを作る`;
+    case "rm":
+      return `${command} で削除する`;
+    case "cp":
+      return `${command} でコピーする`;
+    case "echo":
+      return `${command} で文字を書き込む`;
+    default:
+      return `${command} を実行する`;
+  }
+}
+
+function buildExpectForCommand(command, context) {
+  const parsed = parseCommand(command);
+  const { values } = splitOptions(parsed.args);
+  const base = context.cwd;
+  switch (parsed.command) {
+    case "ssh":
+      return { pendingHostKeyConfirmation: true };
+    case "pwd":
+      return { cwd: base };
+    case "ls":
+      return { exists: normalizePath(values[0] || base, base) };
+    case "cd": {
+      const cwd = normalizePath(values[0] || "/home/student", base);
+      context.cwd = cwd;
+      return { cwd };
+    }
+    case "cat":
+    case "more": {
+      const file = normalizePath(values[0], base);
+      return context.files[file] !== undefined ? { file, content: context.files[file] } : { file };
+    }
+    case "mkdir": {
+      const path = normalizePath(values[values.length - 1], base);
+      return { exists: path, type: "dir" };
+    }
+    case "touch": {
+      const path = normalizePath(values[0], base);
+      if (context.files[path] === undefined) context.files[path] = "";
+      return { exists: path, type: "file" };
+    }
+    case "echo": {
+      const redirectIndex = parsed.args.indexOf(">");
+      if (redirectIndex < 0) return {};
+      const text = parsed.args.slice(0, redirectIndex).join(" ").replace(/^"|"$/g, "");
+      const file = normalizePath(parsed.args[redirectIndex + 1], base);
+      context.files[file] = `${text}\n`;
+      return { file, content: `${text}\n` };
+    }
+    case "rm":
+      return { notExists: normalizePath(values[0], base) };
+    case "cp": {
+      const source = normalizePath(values[0], base);
+      const requestedDest = normalizePath(values[1], base);
+      const dest = resolveCopyDestinationFromFs(state.fs, source, requestedDest);
+      if (context.files[source] !== undefined) context.files[dest] = context.files[source];
+      return context.files[dest] !== undefined ? { file: dest, content: context.files[dest] } : { exists: dest };
+    }
+    case "mv": {
+      const source = normalizePath(values[0], base);
+      const dest = normalizePath(values[1], base);
+      if (context.files[source] !== undefined) {
+        context.files[dest] = context.files[source];
+        delete context.files[source];
+      }
+      return { exists: dest, notExists: source };
+    }
+    case "whoami":
+      return { loggedIn: true, user: "student" };
+    case "hostname":
+      return { loggedIn: true, host: "linux-practice" };
+    default:
+      return {};
+  }
+}
+
 function buildTasksFromCommandList(text) {
   const commands = text.split(/\r?\n/).map(normalizeSpaces).filter(Boolean);
   if (commands.length === 0) throw new Error("学生が実行するコマンドを1つ以上入力してください");
@@ -990,19 +1129,46 @@ function writeFile(path, content) {
   addChild(path);
 }
 
+function cloneNodeForCopy(source) {
+  const clone = structuredClone(source);
+  clone.mtime = RECENT_LS_MTIME;
+  if (clone.type === "file") clone.size = clone.content.length;
+  return clone;
+}
+
+function resolveCopyDestination(sourcePath, destPath) {
+  const dest = state.fs[destPath];
+  if (dest?.type === "dir") {
+    return destPath === "/" ? `/${basename(sourcePath)}` : `${destPath}/${basename(sourcePath)}`;
+  }
+  return destPath;
+}
+
+function resolveCopyDestinationFromFs(fs, sourcePath, destPath) {
+  const dest = fs[destPath];
+  if (dest?.type === "dir") {
+    return destPath === "/" ? `/${basename(sourcePath)}` : `${destPath}/${basename(sourcePath)}`;
+  }
+  return destPath;
+}
+
 function copyPath(sourcePath, destPath, recursive = false) {
   const source = state.fs[sourcePath];
+  const finalDestPath = resolveCopyDestination(sourcePath, destPath);
   if (!source) throw new Error(`cp: cannot stat '${sourcePath}': No such file or directory`);
   if (source.type === "file") {
-    writeFile(destPath, source.content);
+    ensureParent(finalDestPath);
+    state.fs[finalDestPath] = cloneNodeForCopy(source);
+    addChild(finalDestPath);
     return;
   }
-  if (!recursive) throw new Error("cp: omitting directory");
-  ensureParent(destPath);
-  state.fs[destPath] = structuredClone(source);
-  addChild(destPath);
+  if (!recursive) throw new Error(`cp: -r not specified; omitting directory '${sourcePath}'`);
+  ensureParent(finalDestPath);
+  state.fs[finalDestPath] = cloneNodeForCopy(source);
+  state.fs[finalDestPath].children = [];
+  addChild(finalDestPath);
   source.children.forEach((child) => {
-    copyPath(`${sourcePath}/${child}`, `${destPath}/${child}`, true);
+    copyPath(`${sourcePath}/${child}`, `${finalDestPath}/${child}`, true);
   });
 }
 
@@ -1013,7 +1179,7 @@ function removePathRecursive(path, recursive = false, force = false) {
     throw new Error(`rm: cannot remove '${path}': No such file or directory`);
   }
   if (node.type === "dir") {
-    if (!recursive && node.children.length > 0) throw new Error("rm: is a directory");
+    if (!recursive) throw new Error(`rm: cannot remove '${path}': Is a directory`);
     [...node.children].forEach((child) => removePathRecursive(`${path}/${child}`, true, force));
   }
   removePath(path);
@@ -1130,6 +1296,16 @@ function runAwk(args) {
   printBlock(readFile(normalizePath(file)).split("\n").filter(Boolean).map((line) => line.split(separator)[field] || "").join("\n"));
 }
 
+function runMore(args) {
+  const { values } = splitOptions(args);
+  if (!values[0]) throw new Error("more: missing file operand");
+  values.forEach((arg) => {
+    const content = readFile(normalizePath(arg)).replace(/\n$/, "");
+    printBlock(content);
+    if (content.split("\n").length > 20) printLine("--More--", "system");
+  });
+}
+
 function runMkdir(args) {
   const { options, values } = splitOptions(args);
   const parents = hasFlag(options, "p");
@@ -1158,7 +1334,22 @@ function runMkdir(args) {
 function runRm(args) {
   const { options, values } = splitOptions(args);
   if (!values[0]) throw new Error("rm: missing operand");
-  values.forEach((arg) => removePathRecursive(normalizePath(arg), hasFlag(options, "r") || hasFlag(options, "R"), hasFlag(options, "f")));
+  const recursive = hasFlag(options, "r") || hasFlag(options, "R");
+  const force = hasFlag(options, "f");
+  const interactive = hasFlag(options, "i");
+  if (interactive) {
+    const targetPath = normalizePath(values[0]);
+    const node = state.fs[targetPath];
+    if (!node) {
+      if (force) return;
+      throw new Error(`rm: cannot remove '${values[0]}': No such file or directory`);
+    }
+    const typeLabel = node.type === "dir" ? "directory" : "regular file";
+    pendingRmConfirmation = { path: targetPath, recursive, force };
+    printLine(`rm: remove ${typeLabel} '${values[0]}'?`, "system");
+    return;
+  }
+  values.forEach((arg) => removePathRecursive(normalizePath(arg), recursive, force));
 }
 
 function runCp(args) {
@@ -1190,6 +1381,7 @@ function execute(parsed) {
     case "ls": return runLs(args);
     case "cd": return runCd(args);
     case "cat": return runCat(args);
+    case "more": return runMore(args);
     case "mkdir": return runMkdir(args);
     case "touch": return runTouch(args);
     case "rm": return runRm(args);
@@ -1419,6 +1611,34 @@ function normalizeCommandForComparison(commandText, base = state.cwd) {
   return normalizeSpaces([parsed.command, ...args].join(" "));
 }
 
+function normalizeCommandForComparison(commandText, base = state.cwd) {
+  const parsed = parseCommand(commandText);
+  const { options, values } = splitOptions(parsed.args);
+  const normalizeValueIndexes = {
+    cd: [0],
+    ls: [0],
+    cat: values.map((_, index) => index),
+    more: values.map((_, index) => index),
+    mkdir: values.map((_, index) => index),
+    touch: values.map((_, index) => index),
+    rm: values.map((_, index) => index),
+    cp: [0, 1],
+    mv: [0, 1],
+    head: values.length ? [values.length - 1] : [],
+    tail: values.length ? [values.length - 1] : [],
+    wc: values.map((_, index) => index),
+    sed: values.length >= 2 ? [1] : [],
+    grep: values.length >= 2 ? values.slice(1).map((_, index) => index + 1) : [],
+    find: [0]
+  }[parsed.command] || [];
+
+  const normalizedValues = values.map((value, index) => {
+    if (!value || value.startsWith("-") || !normalizeValueIndexes.includes(index)) return value;
+    return normalizePath(value, base);
+  });
+  return normalizeSpaces([parsed.command, ...options, ...normalizedValues].join(" "));
+}
+
 function commandsEquivalent(expected, actual, before) {
   if (normalizeSpaces(expected) === normalizeSpaces(actual)) return true;
   return normalizeCommandForComparison(expected, before.cwd) === normalizeCommandForComparison(actual, before.cwd);
@@ -1461,7 +1681,12 @@ function validateExpectForExtendedCommands(expect, parsed, before) {
       return state.fs[target]?.type === "file" && state.fs[target].content === `${text}\n`;
     }
     case "rm": return values.every((arg) => !state.fs[normalizePath(arg, before.cwd)]);
-    case "cp": return !!state.fs[normalizePath(values[1], before.cwd)];
+    case "cp": {
+      const source = normalizePath(values[0], before.cwd);
+      const requestedDest = normalizePath(values[1], before.cwd);
+      const dest = resolveCopyDestinationFromFs(before.fs, source, requestedDest);
+      return !!state.fs[dest];
+    }
     case "mv": return !state.fs[normalizePath(values[0], before.cwd)] && !!state.fs[normalizePath(values[1], before.cwd)];
     case "cat":
     case "head":
@@ -1507,11 +1732,11 @@ commandForm.addEventListener("submit", (event) => {
   const input = commandInput.value.trim();
   if (!input) return;
 
-  if (!isInSshDialogue()) {
+  if (!isAwaitingInteractiveInput()) {
     printLine(`${promptLabel.textContent} ${input}`);
     commandHistory.push(input);
     historyIndex = commandHistory.length;
-  } else if (isAwaitingHostKeyConfirmation()) {
+  } else if (isAwaitingHostKeyConfirmation() || isAwaitingRmConfirmation()) {
     printLine(input);
   }
 
@@ -1522,10 +1747,20 @@ commandForm.addEventListener("submit", (event) => {
       handleHostKeyConfirmation(input);
     } else if (isAwaitingPassword()) {
       completePassword(input);
+    } else if (isAwaitingRmConfirmation()) {
+      const pending = completeRmConfirmation(input);
+      if (pending?.taskInput && ["y", "yes"].includes(input.toLowerCase())) {
+        markTasks(pending.taskInput, pending.taskParsed, pending.before);
+      }
     } else {
       const parsed = parseCommand(input);
       const before = snapshotState();
       execute(parsed);
+      if (pendingRmConfirmation && parsed.command === "rm") {
+        pendingRmConfirmation.taskInput = parsed.raw;
+        pendingRmConfirmation.taskParsed = parsed;
+        pendingRmConfirmation.before = before;
+      }
       markTasks(parsed.raw, parsed, before);
       if (parsed.command === "exit") setScenario("login");
     }
@@ -1662,6 +1897,7 @@ nextScenarioButton.addEventListener("click", () => {
 resetButton.addEventListener("click", () => {
   state = createInitialState();
   resetSshAuthState();
+  pendingRmConfirmation = null;
   knownHosts.clear();
   commandHistory = [];
   historyIndex = 0;
@@ -1679,11 +1915,16 @@ function buildHelpText() {
     "  ls -la",
     "  hostname",
     "  ls -l",
+    "  cat demo.txt",
+    "  more demo.txt",
     "  ls -t",
     "  ls -r documents",
     "  ls -F documents",
     "  mkdir -p practice/logs",
+    "  cp /etc/hosts .",
+    "  cp -r /usr/local/share sample_dir",
     "  cp file.txt copy.txt",
+    "  rm -i sample.txt",
     "  rm -r practice",
     "  head -n 5 documents/lesson.txt",
     "  tail -n 5 documents/lesson.txt",
