@@ -75,7 +75,6 @@ const scenarios = {
     tasks: [
       { text: "exit を実行して SSH セッションを終了する", command: "exit", expect: { loggedIn: false } }
     ]
-  },
   }
 };
 
