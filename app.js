@@ -69,15 +69,6 @@ const scenarios = {
       { text: "ls -la を実行してホームディレクトリの一覧を確認する", command: "ls -la", expect: { exists: "/home/student", type: "dir" } }
     ]
   },
-  materialsCheck: {
-    label: "教材確認",
-    allowed: ["pwd", "ls", "cd", "cat", "help", "clear", "whoami", "hostname", "exit"],
-    tasks: [
-      { text: "cd documents で教材フォルダへ移動する", command: "cd documents", expect: { cwd: "/home/student/documents" } },
-      { text: "ls で教材ファイルの一覧を確認する", command: "ls", expect: { exists: "/home/student/documents", type: "dir" } },
-      { text: "cat lesson.txt で lesson.txt の内容を確認する", command: "cat lesson.txt", expect: { file: "/home/student/documents/lesson.txt" } }
-    ]
-  },
   logout: {
     label: "ログアウト",
     allowed: ["help", "clear", "exit"],
@@ -85,25 +76,6 @@ const scenarios = {
       { text: "exit を実行して SSH セッションを終了する", command: "exit", expect: { loggedIn: false } }
     ]
   },
-  basics: {
-    label: "基本操作",
-    allowed: ["pwd", "ls", "cd", "cat", "help", "clear", "whoami", "exit"],
-    tasks: [
-      { text: "pwd で現在地を確認する", command: "pwd", expect: { cwd: "/home/student" } },
-      { text: "ls でファイル一覧を見る", command: "ls", expect: { exists: "/home/student/documents", type: "dir" } },
-      { text: "cd documents で移動する", command: "cd documents", expect: { cwd: "/home/student/documents" } },
-      { text: "cat memo.txt で内容を確認する", command: "cat memo.txt", expect: { exists: "/home/student/documents/memo.txt", type: "file" } }
-    ]
-  },
-  files: {
-    label: "ファイル操作",
-    allowed: ["pwd", "ls", "cd", "cat", "mkdir", "touch", "rm", "cp", "mv", "echo", "help", "clear", "whoami", "exit"],
-    tasks: [
-      { text: "mkdir practice でディレクトリを作る", command: "mkdir practice", expect: { exists: "/home/student/practice", type: "dir" } },
-      { text: "touch practice/note.txt でファイルを作る", command: "touch practice/note.txt", expect: { exists: "/home/student/practice/note.txt", type: "file" } },
-      { text: "echo hello > practice/note.txt で書き込む", command: "echo hello > practice/note.txt", expect: { file: "/home/student/practice/note.txt", content: "hello\n" } },
-      { text: "cat practice/note.txt で確認する", command: "cat practice/note.txt", expect: { file: "/home/student/practice/note.txt", content: "hello\n" } }
-    ]
   }
 };
 

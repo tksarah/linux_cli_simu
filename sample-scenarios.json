@@ -54,27 +54,6 @@
       ]
     },
     {
-      "label": "教材確認",
-      "allowed": ["pwd", "ls", "cd", "cat", "help", "clear", "whoami", "hostname", "exit"],
-      "tasks": [
-        {
-          "text": "cd documents で教材フォルダへ移動する",
-          "command": "cd documents",
-          "expect": { "cwd": "/home/student/documents" }
-        },
-        {
-          "text": "ls で教材ファイルの一覧を確認する",
-          "command": "ls",
-          "expect": { "exists": "/home/student/documents", "type": "dir" }
-        },
-        {
-          "text": "cat lesson.txt で lesson.txt の内容を確認する",
-          "command": "cat lesson.txt",
-          "expect": { "file": "/home/student/documents/lesson.txt" }
-        }
-      ]
-    },
-    {
       "label": "ログアウト",
       "allowed": ["help", "clear", "exit"],
       "tasks": [
@@ -82,58 +61,6 @@
           "text": "exit を実行して SSH セッションを終了する",
           "command": "exit",
           "expect": { "loggedIn": false }
-        }
-      ]
-    },
-    {
-      "label": "パス操作",
-      "allowed": ["pwd", "ls", "cd", "cat", "help", "clear", "whoami", "exit"],
-      "tasks": [
-        {
-          "text": "pwd で現在地を確認する",
-          "command": "pwd",
-          "expect": { "cwd": "/home/student" }
-        },
-        {
-          "text": "cd documents で documents ディレクトリへ移動する",
-          "command": "cd documents",
-          "expect": { "cwd": "/home/student/documents" }
-        },
-        {
-          "text": "ls でファイル一覧を見る",
-          "command": "ls",
-          "expect": { "exists": "/home/student/documents", "type": "dir" }
-        },
-        {
-          "text": "cat lesson.txt で lesson.txt の内容を確認する",
-          "command": "cat lesson.txt",
-          "expect": { "file": "/home/student/documents/lesson.txt" }
-        }
-      ]
-    },
-    {
-      "label": "作成と確認",
-      "allowed": ["pwd", "ls", "cd", "cat", "mkdir", "touch", "echo", "help", "clear", "whoami", "exit"],
-      "tasks": [
-        {
-          "text": "mkdir practice で practice ディレクトリを作る",
-          "command": "mkdir practice",
-          "expect": { "exists": "/home/student/practice", "type": "dir" }
-        },
-        {
-          "text": "touch practice/report.txt で report.txt を作る",
-          "command": "touch practice/report.txt",
-          "expect": { "exists": "/home/student/practice/report.txt", "type": "file" }
-        },
-        {
-          "text": "echo done > practice/report.txt で文字を書き込む",
-          "command": "echo done > practice/report.txt",
-          "expect": { "file": "/home/student/practice/report.txt", "content": "done\n" }
-        },
-        {
-          "text": "cat practice/report.txt で内容を確認する",
-          "command": "cat practice/report.txt",
-          "expect": { "file": "/home/student/practice/report.txt", "content": "done\n" }
         }
       ]
     }
