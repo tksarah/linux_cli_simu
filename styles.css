@@ -299,6 +299,10 @@ h3 {
   padding: 0;
 }
 
+#adminHelpDialog {
+  width: min(760px, calc(100vw - 32px));
+}
+
 .password-dialog::backdrop {
   background: rgba(16, 20, 18, 0.38);
 }
@@ -346,6 +350,42 @@ h3 {
   justify-content: flex-end;
 }
 
+#adminHelpContent {
+  margin: 0;
+  min-height: 24rem;
+  max-height: 24rem;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8faf8;
+  font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.admin-help-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-help-pagination {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-help-pagination span {
+  min-width: 4rem;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .form-error {
   min-height: 1.3em;
   margin: 0;
@@ -391,23 +431,8 @@ h3 {
   background: #fff;
 }
 
-#adminHelpContent {
-  min-height: 280px;
-  margin: 0;
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 14px;
-  background: #101412;
-  color: var(--terminal-text);
-  font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
-  font-size: 0.9rem;
-  line-height: 1.55;
-  white-space: pre-wrap;
-}
-
 .admin-preview pre {
-  min-height: 520px;
+  height: calc(30 * 1.5em + 30px);
   margin: 0;
   overflow: auto;
   border: 1px solid var(--line);
@@ -419,6 +444,44 @@ h3 {
   font-size: 0.86rem;
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+.note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.admin-test-panel {
+  display: grid;
+  gap: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+
+.admin-test-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-terminal-frame {
+  height: 420px;
+}
+
+.admin-task-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--ink);
+}
+
+.admin-task-list li.is-done {
+  color: var(--accent-strong);
+  text-decoration: line-through;
 }
 
 .control-block {
@@ -635,6 +698,11 @@ button.is-complete.is-active {
 
   .admin-layout {
     grid-template-columns: 1fr;
+  }
+
+  .admin-test-header {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

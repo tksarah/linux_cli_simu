@@ -51,6 +51,17 @@
           "command": "ls -la",
           "expect": { "exists": "/home/student", "type": "dir" }
         }
+        ,
+        {
+          "text": "ls -a を実行して隠しファイルが表示されることを確認する",
+          "command": "ls -a",
+          "expect": { "exists": "/home/student", "type": "dir" }
+        },
+        {
+          "text": "ls -t を実行して更新日時順で並ぶことを確認する",
+          "command": "ls -t",
+          "expect": { "exists": "/home/student", "type": "dir" }
+        }
       ]
     },
     {

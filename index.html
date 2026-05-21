@@ -95,11 +95,18 @@
         <div>
           <p class="eyebrow">Help</p>
           <h2>講師向けヘルプ</h2>
-          <p class="note">授業でよく使うコマンド例です。学生に見せたいコマンド一覧の確認にも使えます。</p>
+          <p class="note">現在実行できるコマンド、主なオプション、代表的な引数形式を確認できます。</p>
         </div>
         <pre id="adminHelpContent"></pre>
-        <div class="dialog-actions">
-          <button type="button" id="closeAdminHelp" class="primary-button">閉じる</button>
+        <div class="admin-help-footer">
+          <div class="admin-help-pagination">
+            <button type="button" id="adminHelpPrevPage">前へ</button>
+            <span id="adminHelpPageInfo">1 / 1</span>
+            <button type="button" id="adminHelpNextPage">次へ</button>
+          </div>
+          <div class="dialog-actions">
+            <button type="button" id="closeAdminHelp" class="primary-button">閉じる</button>
+          </div>
         </div>
       </div>
     </dialog>
@@ -137,6 +144,7 @@ cat practice/report.txt</textarea>
           <div class="admin-actions">
             <button type="submit" class="primary-button">シナリオを追加</button>
             <button type="button" id="downloadScenarioJson">JSONをダウンロード</button>
+            <button type="button" id="resetAdminJson">作成中JSONをリセット</button>
           </div>
           <p class="form-error" id="adminScenarioError"></p>
         </form>
@@ -146,7 +154,34 @@ cat practice/report.txt</textarea>
             <p class="eyebrow">Preview</p>
             <h2>作成中のJSON</h2>
           </div>
+          <p class="note">プレビューは追加済みJSON、下の試験ターミナルは現在の入力内容を使います。</p>
           <pre id="adminJsonPreview"></pre>
+
+          <section class="admin-test-panel" aria-label="シナリオ試験ターミナル">
+            <div class="admin-test-header">
+              <div>
+                <p class="eyebrow">Sandbox</p>
+                <h2>作成中シナリオを試す</h2>
+              </div>
+              <div class="admin-actions">
+                <button type="button" id="startAdminTest" class="primary-button">試験開始</button>
+                <button type="button" id="resetAdminTest">ターミナルを再初期化</button>
+              </div>
+            </div>
+            <p class="note" id="adminTestStatus">現在の入力内容から一時シナリオを作成して試せます。</p>
+            <div class="terminal-frame admin-terminal-frame">
+              <div class="terminal-toolbar">
+                <span></span><span></span><span></span>
+                <strong>instructor-preview</strong>
+              </div>
+              <div class="terminal-output" id="adminTerminalOutput"></div>
+              <form class="command-line" id="adminCommandForm" autocomplete="off">
+                <span id="adminPromptLabel">local &gt; </span>
+                <input id="adminCommandInput" type="text" spellcheck="false" placeholder="ここで作成中シナリオを試します">
+              </form>
+            </div>
+            <ul class="admin-task-list" id="adminTaskList"></ul>
+          </section>
         </section>
       </main>
     </section>

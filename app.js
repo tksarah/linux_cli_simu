@@ -17,6 +17,9 @@ const adminPasswordError = document.querySelector("#adminPasswordError");
 const cancelAdminLogin = document.querySelector("#cancelAdminLogin");
 const adminHelpDialog = document.querySelector("#adminHelpDialog");
 const adminHelpContent = document.querySelector("#adminHelpContent");
+const adminHelpPageInfo = document.querySelector("#adminHelpPageInfo");
+const adminHelpPrevPage = document.querySelector("#adminHelpPrevPage");
+const adminHelpNextPage = document.querySelector("#adminHelpNextPage");
 const closeAdminHelp = document.querySelector("#closeAdminHelp");
 const adminScreen = document.querySelector("#adminScreen");
 const closeAdminButton = document.querySelector("#closeAdminButton");
@@ -27,6 +30,15 @@ const adminCommandList = document.querySelector("#adminCommandList");
 const adminScenarioError = document.querySelector("#adminScenarioError");
 const adminJsonPreview = document.querySelector("#adminJsonPreview");
 const downloadScenarioJson = document.querySelector("#downloadScenarioJson");
+const resetAdminJson = document.querySelector("#resetAdminJson");
+const startAdminTest = document.querySelector("#startAdminTest");
+const resetAdminTest = document.querySelector("#resetAdminTest");
+const adminTerminalOutput = document.querySelector("#adminTerminalOutput");
+const adminCommandForm = document.querySelector("#adminCommandForm");
+const adminCommandInput = document.querySelector("#adminCommandInput");
+const adminPromptLabel = document.querySelector("#adminPromptLabel");
+const adminTestStatus = document.querySelector("#adminTestStatus");
+const adminTaskList = document.querySelector("#adminTaskList");
 const studentScenarioFile = document.querySelector("#studentScenarioFile");
 const studentDropzone = document.querySelector("#studentDropzone");
 const scenarioLoadStatus = document.querySelector("#scenarioLoadStatus");
@@ -35,6 +47,111 @@ const commandCatalog = [
   "ssh", "pwd", "ls", "cd", "cat", "mkdir", "touch", "rm",
   "cp", "mv", "echo", "more", "clear", "help", "whoami", "hostname", "exit"
 ];
+const COMMAND_HELP_ENTRIES = {
+  ssh: {
+    usage: "ssh student@linux-practice",
+    options: [],
+    note: "接続先は student@linux-practice 固定です"
+  },
+  pwd: {
+    usage: "pwd",
+    options: []
+  },
+  ls: {
+    usage: "ls [-l] [-t] [-r] [-F] [path]",
+    options: ["-l", "-t", "-r", "-F"]
+  },
+  cd: {
+    usage: "cd <directory>",
+    options: []
+  },
+  cat: {
+    usage: "cat <file>",
+    options: []
+  },
+  mkdir: {
+    usage: "mkdir [-p] <directory>",
+    options: ["-p"]
+  },
+  touch: {
+    usage: "touch <file>",
+    options: []
+  },
+  rm: {
+    usage: "rm [-i] [-r|-R] [-f] <path>",
+    options: ["-i", "-r", "-R", "-f"]
+  },
+  cp: {
+    usage: "cp [-r|-R] <source> <destination>",
+    options: ["-r", "-R"]
+  },
+  mv: {
+    usage: "mv <source> <destination>",
+    options: []
+  },
+  echo: {
+    usage: "echo <text> [> <file>]",
+    options: []
+  },
+  more: {
+    usage: "more <file>",
+    options: []
+  },
+  clear: {
+    usage: "clear",
+    options: []
+  },
+  help: {
+    usage: "help",
+    options: [],
+    note: "学生端末では使用例、講師画面では現在許可されているコマンド一覧を表示します"
+  },
+  whoami: {
+    usage: "whoami",
+    options: []
+  },
+  hostname: {
+    usage: "hostname",
+    options: []
+  },
+  exit: {
+    usage: "exit",
+    options: []
+  },
+  head: {
+    usage: "head [-n <lines>] <file>",
+    options: ["-n <lines>"]
+  },
+  tail: {
+    usage: "tail [-n <lines>] <file>",
+    options: ["-n <lines>"]
+  },
+  grep: {
+    usage: "grep [-i] [-n] [-v] <pattern> <file>",
+    options: ["-i", "-n", "-v"]
+  },
+  wc: {
+    usage: "wc [-l] [-w] [-c] <file>",
+    options: ["-l", "-w", "-c"]
+  },
+  date: {
+    usage: "date [+format]",
+    options: ["+%Y-%m-%d など"]
+  },
+  find: {
+    usage: "find <path> [-name <pattern>] [-type f|d]",
+    options: ["-name <pattern>", "-type f", "-type d"]
+  },
+  sed: {
+    usage: "sed s/<pattern>/<replacement>/g <file>",
+    options: []
+  },
+  awk: {
+    usage: "awk [-F <separator>] '{print $1}' <file>",
+    options: ["-F <separator>"]
+  }
+};
+const ADMIN_HELP_PAGE_SIZE = 20;
 const INSTRUCTOR_PASSWORD = "linux123";
 const SSH_TARGET = "student@linux-practice";
 const SSH_PASSWORD = "linux";
@@ -43,6 +160,14 @@ const SSH_HOST_FINGERPRINT = "SHA256:Q8i7MZ0P1nV4m0sB8xJ9cL2rW5kT6yH3dF1pN7aS4eU
 const adminPackage = {
   lessonTitle: "",
   scenarios: []
+};
+
+const ADMIN_RUNTIME_NAME = "admin";
+const ADMIN_PREVIEW_KEY = "preview";
+const EMPTY_ADMIN_SCENARIO = {
+  label: "試験前",
+  allowed: ["help", "clear"],
+  tasks: []
 };
 ["head", "tail", "grep", "wc", "date", "find", "sed", "awk"].forEach((command) => {
   if (!commandCatalog.includes(command)) commandCatalog.push(command);
@@ -135,12 +260,166 @@ function createInitialState() {
     fs: {
       "/": createDirNode(["home", "etc", "usr", "var"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
       "/home": createDirNode(["student", "user01"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
-      "/home/student": createDirNode(["demo.txt", "documents", "readme.txt", "sample.txt", "sample_dir"], { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
+      "/home/student": createDirNode([".bashrc", ".hidden", "demo.txt", "documents", "long-text-simulator.txt", "old.txt", "readme.txt", "recent.txt", "sample.txt", "sample_dir"], { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
       "/home/user01": createDirNode([], { owner: "user01", group: "user01", mtime: RECENT_LS_MTIME }),
+      "/home/student/.bashrc": createFileNode("# ~/.bashrc simulated\nexport PATH=$PATH:/home/student/bin\n", { owner: "student", group: "student", mtime: new Date("2021-12-01T00:00:00Z") }),
+      "/home/student/.hidden": createFileNode("This is a hidden file.\n", { owner: "student", group: "student", mtime: new Date("2021-11-01T00:00:00Z") }),
       "/home/student/demo.txt": createFileNode("Demo file for cat and more practice.\nLine 2: Linux commands read files from the virtual filesystem.\n", { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
+      "/home/student/old.txt": createFileNode("Old file for testing ls -t ordering.\n", { owner: "student", group: "student", mtime: new Date("2020-01-01T00:00:00Z") }),
       "/home/student/readme.txt": createFileNode("Linux CLI practice environment.\n", { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
       "/home/student/sample.txt": createFileNode("Temporary sample file.\n", { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
       "/home/student/sample_dir": createDirNode(["note.txt"], { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
+      "/home/student/recent.txt": createFileNode("Most recent file for testing ls -t ordering.\n", { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
+      "/home/student/long-text-simulator.txt": createFileNode(`============================================================
+    # MANUAL SECTION 1
+    ------------------------------------------------------------
+    Line 1: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 2: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 3: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 4: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 5: This is example documentation text to provide scrolling content.
+    Line 6: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 7: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 8: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 9: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 10: This is example documentation text to provide scrolling content.
+
+    Line 11: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 12: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 13: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 14: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 15: This is example documentation text to provide scrolling content.
+    Line 16: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 17: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 18: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 19: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 20: This is example documentation text to provide scrolling content.
+
+    Line 21: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 22: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 23: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 24: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 25: This is example documentation text to provide scrolling content.
+    Line 26: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 27: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 28: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 29: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 30: This is example documentation text to provide scrolling content.
+
+    ============================================================
+    # MANUAL SECTION 2
+    ------------------------------------------------------------
+    Line 51: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 52: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 53: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 54: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 55: This is example documentation text to provide scrolling content.
+    Line 56: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 57: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 58: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 59: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 60: This is example documentation text to provide scrolling content.
+
+    Line 61: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 62: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 63: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 64: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 65: This is example documentation text to provide scrolling content.
+    Line 66: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 67: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 68: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 69: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 70: This is example documentation text to provide scrolling content.
+
+    Line 71: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 72: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 73: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 74: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 75: This is example documentation text to provide scrolling content.
+    Line 76: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 77: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 78: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 79: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 80: This is example documentation text to provide scrolling content.
+
+    Line 81: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 82: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 83: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 84: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 85: This is example documentation text to provide scrolling content.
+    Line 86: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 87: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 88: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 89: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 90: This is example documentation text to provide scrolling content.
+
+    Line 91: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 92: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 93: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 94: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 95: This is example documentation text to provide scrolling content.
+    Line 96: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 97: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 98: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 99: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 100: This is example documentation text to provide scrolling content.
+
+    ============================================================
+    # MANUAL SECTION 3
+    ------------------------------------------------------------
+    Line 101: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 102: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 103: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 104: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 105: This is example documentation text to provide scrolling content.
+    Line 106: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 107: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 108: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 109: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 110: This is example documentation text to provide scrolling content.
+
+    Line 111: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 112: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 113: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 114: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 115: This is example documentation text to provide scrolling content.
+    Line 116: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 117: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 118: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 119: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 120: This is example documentation text to provide scrolling content.
+
+    Line 121: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 122: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 123: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 124: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 125: This is example documentation text to provide scrolling content.
+    Line 126: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 127: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 128: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 129: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 130: This is example documentation text to provide scrolling content.
+
+    Line 131: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 132: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 133: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 134: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 135: This is example documentation text to provide scrolling content.
+    Line 136: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 137: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 138: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 139: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 140: This is example documentation text to provide scrolling content.
+
+    ... (file continues) ...
+
+    Line 1719: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 1720: This is example documentation text to provide scrolling content.
+
+    Line 1721: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 1722: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    Line 1723: This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content. This is example documentation text to provide scrolling content.
+    `, { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
       "/home/student/sample_dir/note.txt": createFileNode("Sample directory content.\n", { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
       "/home/student/documents": createDirNode(["lesson.txt", "memo.txt"], { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
       "/home/student/documents/memo.txt": createFileNode("Class memo: commands are typed as command plus target.\n", { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
@@ -166,6 +445,8 @@ function createInitialState() {
 }
 
 let state = createInitialState();
+// long-text-simulator.txt is embedded into the virtual FS in createInitialState().
+// External runtime loader removed because this simulator runs in-browser only.
 let activeScenarioKey = "login";
 let allowedCommands = new Set(scenarios[activeScenarioKey].allowed);
 let commandHistory = [];
@@ -173,10 +454,251 @@ let historyIndex = 0;
 let pendingPasswordFor = null;
 let pendingHostKeyFor = null;
 let pendingRmConfirmation = null;
+let pendingMorePaging = null;
 let sshPasswordAttemptsRemaining = 0;
-const knownHosts = new Set();
+let knownHosts = new Set();
 let customScenarioCount = 0;
-const completedTasks = new Map();
+let completedTasks = new Map();
+let activeRuntimeName = "main";
+let adminHelpPaging = {
+  lines: [],
+  page: 0
+};
+
+function cloneCompletedTasksMap(source) {
+  const cloned = new Map();
+  source.forEach((value, key) => {
+    cloned.set(key, new Set(value));
+  });
+  return cloned;
+}
+
+function createRuntimeSnapshot(overrides = {}) {
+  return {
+    state: overrides.state || createInitialState(),
+    activeScenarioKey: overrides.activeScenarioKey || "login",
+    allowedCommands: [...(overrides.allowedCommands || scenarios.login.allowed)],
+    commandHistory: [...(overrides.commandHistory || [])],
+    historyIndex: overrides.historyIndex || 0,
+    pendingPasswordFor: overrides.pendingPasswordFor || null,
+    pendingHostKeyFor: overrides.pendingHostKeyFor || null,
+    pendingRmConfirmation: overrides.pendingRmConfirmation || null,
+    sshPasswordAttemptsRemaining: overrides.sshPasswordAttemptsRemaining || 0,
+    knownHosts: [...(overrides.knownHosts || [])],
+    completedTasks: cloneCompletedTasksMap(overrides.completedTasks || new Map()),
+    scenarios: overrides.scenarios || scenarios
+  };
+}
+
+const runtimeRegistry = {
+  main: {
+    name: "main",
+    elements: {
+      terminalOutput,
+      commandInput,
+      promptLabel
+    },
+    scenarios,
+    snapshot: createRuntimeSnapshot({
+      state,
+      activeScenarioKey,
+      allowedCommands: [...allowedCommands],
+      commandHistory,
+      historyIndex,
+      pendingPasswordFor,
+      pendingHostKeyFor,
+      pendingRmConfirmation,
+      sshPasswordAttemptsRemaining,
+      knownHosts: [...knownHosts],
+      completedTasks,
+      scenarios
+    })
+  },
+  [ADMIN_RUNTIME_NAME]: {
+    name: ADMIN_RUNTIME_NAME,
+    elements: {
+      terminalOutput: adminTerminalOutput,
+      commandInput: adminCommandInput,
+      promptLabel: adminPromptLabel
+    },
+    scenarios: {
+      [ADMIN_PREVIEW_KEY]: EMPTY_ADMIN_SCENARIO
+    },
+    snapshot: createRuntimeSnapshot({
+      activeScenarioKey: ADMIN_PREVIEW_KEY,
+      allowedCommands: EMPTY_ADMIN_SCENARIO.allowed,
+      scenarios: {
+        [ADMIN_PREVIEW_KEY]: EMPTY_ADMIN_SCENARIO
+      }
+    })
+  }
+};
+
+function getCurrentRuntime() {
+  return runtimeRegistry[activeRuntimeName] || runtimeRegistry.main;
+}
+
+function getRuntimeElements() {
+  return getCurrentRuntime().elements;
+}
+
+function getScenarioStore() {
+  return getCurrentRuntime().scenarios || scenarios;
+}
+
+function saveRuntimeSnapshot(runtimeName = activeRuntimeName) {
+  const runtime = runtimeRegistry[runtimeName];
+  if (!runtime) return;
+  runtime.snapshot = createRuntimeSnapshot({
+    state,
+    activeScenarioKey,
+    allowedCommands: [...allowedCommands],
+    commandHistory,
+    historyIndex,
+    pendingPasswordFor,
+    pendingHostKeyFor,
+    pendingRmConfirmation,
+    sshPasswordAttemptsRemaining,
+    knownHosts: [...knownHosts],
+    completedTasks,
+    scenarios: runtime.scenarios
+  });
+}
+
+function loadRuntimeSnapshot(runtimeName) {
+  const runtime = runtimeRegistry[runtimeName];
+  if (!runtime) return;
+  const snapshot = runtime.snapshot;
+  activeRuntimeName = runtimeName;
+  state = snapshot.state;
+  activeScenarioKey = snapshot.activeScenarioKey;
+  allowedCommands = new Set(snapshot.allowedCommands);
+  commandHistory = [...snapshot.commandHistory];
+  historyIndex = snapshot.historyIndex;
+  pendingPasswordFor = snapshot.pendingPasswordFor;
+  pendingHostKeyFor = snapshot.pendingHostKeyFor;
+  pendingRmConfirmation = snapshot.pendingRmConfirmation;
+  sshPasswordAttemptsRemaining = snapshot.sshPasswordAttemptsRemaining;
+  knownHosts = new Set(snapshot.knownHosts);
+  completedTasks = cloneCompletedTasksMap(snapshot.completedTasks);
+}
+
+function withRuntime(runtimeName, action) {
+  const previousRuntimeName = activeRuntimeName;
+  saveRuntimeSnapshot(previousRuntimeName);
+  loadRuntimeSnapshot(runtimeName);
+  try {
+    return action();
+  } finally {
+    saveRuntimeSnapshot(runtimeName);
+    loadRuntimeSnapshot(previousRuntimeName);
+  }
+}
+
+function mainScenarioStartsLoggedOut(key) {
+  return key === "login";
+}
+
+function scenarioStartsLoggedOut(scenario) {
+  if (!scenario || !Array.isArray(scenario.tasks) || scenario.tasks.length === 0) return false;
+  return parseCommand(scenario.tasks[0].command).command === "ssh";
+}
+
+function ensureGuestSession() {
+  state.loggedIn = false;
+  state.user = "guest";
+  state.host = "browser";
+  state.cwd = "/home/student";
+  resetSshAuthState();
+}
+
+function ensureStudentSession() {
+  state.loggedIn = true;
+  state.user = "student";
+  state.host = "linux-practice";
+  state.cwd = "/home/student";
+  resetSshAuthState();
+}
+
+function renderMainControls() {
+  const store = getScenarioStore();
+  scenarioButtons.textContent = "";
+  Object.entries(store).forEach(([key, scenario]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = isScenarioComplete(key) ? `${scenario.label} 完了` : scenario.label;
+    button.classList.toggle("is-active", key === activeScenarioKey);
+    button.classList.toggle("is-complete", isScenarioComplete(key));
+    button.addEventListener("click", () => setScenario(key));
+    scenarioButtons.appendChild(button);
+  });
+
+  taskList.textContent = "";
+  store[activeScenarioKey].tasks.forEach((task, index) => {
+    const item = document.createElement("li");
+    item.textContent = task.text;
+    item.classList.toggle("is-done", getCompletedSet().has(index));
+    taskList.appendChild(item);
+  });
+  updateMainCompletionState();
+  requestAnimationFrame(() => {
+    if (isScenarioComplete()) {
+      scenarioCompleteStatus.scrollIntoView({ block: "end", inline: "nearest" });
+      return;
+    }
+    const firstIncompleteItem = taskList.querySelector("li:not(.is-done)");
+    if (firstIncompleteItem) {
+      firstIncompleteItem.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  });
+}
+
+function updateMainCompletionState() {
+  const store = getScenarioStore();
+  const completedCount = getCompletedSet().size;
+  const taskCount = store[activeScenarioKey].tasks.length;
+  const complete = isScenarioComplete();
+  const nextKey = getNextScenarioKey();
+  scenarioCompleteStatus.textContent = complete
+    ? "このシナリオの課題はすべて完了しました"
+    : `進捗: ${completedCount} / ${taskCount}`;
+  scenarioCompleteStatus.classList.toggle("is-complete", complete);
+  nextScenarioButton.hidden = !complete;
+  nextScenarioButton.disabled = !complete || !nextKey;
+  nextScenarioButton.textContent = nextKey ? `次へ: ${store[nextKey].label}` : "すべて完了";
+}
+
+function renderAdminControls() {
+  const store = getScenarioStore();
+  const scenario = store[activeScenarioKey];
+  adminTaskList.textContent = "";
+
+  if (!scenario || scenario.tasks.length === 0) {
+    adminTestStatus.textContent = "現在の入力内容から一時シナリオを作成して試せます。";
+    return;
+  }
+
+  const completedSet = getCompletedSet();
+  scenario.tasks.forEach((task, index) => {
+    const item = document.createElement("li");
+    item.textContent = task.text;
+    item.classList.toggle("is-done", completedSet.has(index));
+    adminTaskList.appendChild(item);
+  });
+
+  const completedCount = completedSet.size;
+  adminTestStatus.textContent = isScenarioComplete()
+    ? `試験シナリオ「${scenario.label}」を完了しました。`
+    : `試験シナリオ「${scenario.label}」 進捗: ${completedCount} / ${scenario.tasks.length}`;
+}
+
+function renderControls() {
+  if (activeRuntimeName === ADMIN_RUNTIME_NAME) {
+    renderAdminControls();
+    return;
+  }
+  renderMainControls();
+}
 
 function isAwaitingPassword() {
   return pendingPasswordFor !== null;
@@ -214,7 +736,24 @@ function completeRmConfirmation(input) {
   return pending;
 }
 
+function handleMorePagingInput(input) {
+  if (!isPagingMore()) return false;
+
+  const normalized = input.trim().toLowerCase();
+  if (normalized === "q") {
+    clearMorePaging();
+    setPrompt();
+    renderControls();
+    return true;
+  }
+
+  showNextMorePage();
+  renderControls();
+  return true;
+}
+
 function updateSessionStatus() {
+  if (activeRuntimeName !== "main") return;
   sessionStatus.textContent = state.loggedIn ? `${state.user}@${state.host}` : "未ログイン";
   sessionStatus.classList.toggle("is-live", state.loggedIn);
 }
@@ -267,28 +806,76 @@ function handleHostKeyConfirmation(input) {
 }
 
 function printLine(text = "", type = "") {
+  const { terminalOutput: output } = getRuntimeElements();
   const line = document.createElement("div");
   line.className = `terminal-line ${type}`.trim();
   line.textContent = text;
-  terminalOutput.appendChild(line);
-  terminalOutput.scrollTop = terminalOutput.scrollHeight;
+  output.appendChild(line);
+  output.scrollTop = output.scrollHeight;
 }
 
 function printBlock(text, type = "") {
   text.split("\n").forEach((line) => printLine(line, type));
 }
 
+function clearMorePaging() {
+  pendingMorePaging = null;
+}
+
+function setMorePrompt() {
+  const { promptLabel: prompt, commandInput: input } = getRuntimeElements();
+  prompt.textContent = "--More--";
+  input.type = "text";
+}
+
+function isPagingMore() {
+  return pendingMorePaging !== null && pendingMorePaging.runtimeName === activeRuntimeName;
+}
+
+function showNextMorePage() {
+  if (!isPagingMore()) return;
+
+  const paging = pendingMorePaging;
+  const nextIndex = Math.min(paging.index + 20, paging.lines.length);
+  const chunk = paging.lines.slice(paging.index, nextIndex).join("\n");
+  if (chunk) printBlock(chunk);
+  paging.index = nextIndex;
+
+  if (paging.index < paging.lines.length) {
+    printLine("--More--", "system");
+    setMorePrompt();
+    return;
+  }
+
+  clearMorePaging();
+  setPrompt();
+}
+
+function startMorePaging(content) {
+  pendingMorePaging = {
+    runtimeName: activeRuntimeName,
+    lines: content.split("\n"),
+    index: 0
+  };
+  showNextMorePage();
+}
+
 function setPrompt() {
+  const { promptLabel: prompt, commandInput: input } = getRuntimeElements();
+  if (isPagingMore()) {
+    setMorePrompt();
+    return;
+  }
   if (isAwaitingPassword()) {
-    promptLabel.textContent = "password:";
-    commandInput.type = "password";
+    prompt.textContent = "password:";
+    input.type = "password";
     updateSessionStatus();
     return;
   }
 
-  commandInput.type = "text";
+  input.type = "text";
   const symbol = state.user === "root" ? "#" : "$";
-  promptLabel.textContent = state.loggedIn
+  prompt.textContent = state.loggedIn
     ? `${state.user}@${state.host}:${shortPath(state.cwd)}${symbol}`
     : "local > ";
   updateSessionStatus();
@@ -539,7 +1126,12 @@ function getLsEntries(targetPath, options) {
   const entries = node.children.map((child) => {
     const path = `${targetPath}/${child}`;
     return { path, node: state.fs[path] };
-  }).filter(({ node: childNode }) => !!childNode);
+  }).filter(({ node: childNode, path }) => {
+    if (!childNode) return false;
+    const name = basename(path);
+    if (!hasFlag(options, "a") && name.startsWith(".")) return false;
+    return true;
+  });
   const sortedEntries = [...entries].sort((a, b) => {
     if (hasFlag(options, "t")) {
       const delta = (b.node.mtime?.getTime?.() ?? 0) - (a.node.mtime?.getTime?.() ?? 0);
@@ -698,6 +1290,79 @@ function showHelp() {
     "  cp /etc/hosts .",
     "  rm -i sample.txt"
   ].join("\n"), "system");
+}
+
+function getAdminAllowedCommands() {
+  const commandListText = adminCommandList.value.trim();
+  if (commandListText) {
+    try {
+      const tasks = buildTasksFromCommandList(commandListText);
+      const inferred = inferAllowedFromTasks(tasks);
+      return commandCatalog.filter((command) => inferred.includes(command));
+    } catch {
+      // 編集途中で未完成でも、最後に確定した試験ランタイムの内容へフォールバックする。
+    }
+  }
+  const snapshot = runtimeRegistry[ADMIN_RUNTIME_NAME]?.snapshot;
+  const allowed = Array.isArray(snapshot?.allowedCommands)
+    ? snapshot.allowedCommands
+    : EMPTY_ADMIN_SCENARIO.allowed;
+  return commandCatalog.filter((command) => allowed.includes(command));
+}
+
+function buildAdminHelpLines() {
+  const commands = getAdminAllowedCommands();
+  const lines = [
+    "現在実行できるコマンド:",
+    ""
+  ];
+
+  commands.forEach((command) => {
+    const entry = COMMAND_HELP_ENTRIES[command] || {
+      usage: command,
+      options: []
+    };
+    lines.push(command);
+    lines.push(`  書式: ${entry.usage}`);
+    if (entry.options.length > 0) {
+      lines.push(`  オプション: ${entry.options.join(", ")}`);
+    }
+    if (entry.note) {
+      lines.push(`  補足: ${entry.note}`);
+    }
+    lines.push("");
+  });
+
+  if (commands.length === 0) {
+    lines.push("表示できるコマンドがありません");
+  }
+
+  return lines;
+}
+
+function getAdminHelpPageCount() {
+  return Math.max(1, Math.ceil(adminHelpPaging.lines.length / ADMIN_HELP_PAGE_SIZE));
+}
+
+function renderAdminHelpPage() {
+  const pageCount = getAdminHelpPageCount();
+  const safePage = Math.min(adminHelpPaging.page, pageCount - 1);
+  const start = safePage * ADMIN_HELP_PAGE_SIZE;
+  const end = start + ADMIN_HELP_PAGE_SIZE;
+  adminHelpPaging.page = safePage;
+  adminHelpContent.textContent = adminHelpPaging.lines.slice(start, end).join("\n");
+  adminHelpPageInfo.textContent = `${safePage + 1} / ${pageCount}`;
+  adminHelpPrevPage.disabled = safePage === 0;
+  adminHelpNextPage.disabled = safePage >= pageCount - 1;
+}
+
+function openAdminHelpDialog() {
+  adminHelpPaging = {
+    lines: buildAdminHelpLines(),
+    page: 0
+  };
+  renderAdminHelpPage();
+  adminHelpDialog.showModal();
 }
 
 function createScenarioKey(label) {
@@ -1270,11 +1935,8 @@ function runAwk(args) {
 function runMore(args) {
   const { values } = splitOptions(args);
   if (!values[0]) throw new Error("more: missing file operand");
-  values.forEach((arg) => {
-    const content = readFile(normalizePath(arg)).replace(/\n$/, "");
-    printBlock(content);
-    if (content.split("\n").length > 20) printLine("--More--", "system");
-  });
+  const content = values.map((arg) => readFile(normalizePath(arg)).replace(/\n$/, "")).join("\n");
+  startMorePaging(content);
 }
 
 function runMkdir(args) {
@@ -1387,6 +2049,21 @@ function buildAdminScenarioFromForm() {
   });
 }
 
+function buildAdminPreviewScenario() {
+  const tasks = buildTasksFromCommandList(adminCommandList.value);
+  const label = adminScenarioLabel.value.trim() || "入力中シナリオ";
+  return normalizeScenario({
+    label,
+    allowed: inferAllowedFromTasks(tasks),
+    tasks
+  });
+}
+
+function resetAdminPackage() {
+  adminPackage.scenarios = [];
+  updateAdminPreview();
+}
+
 function parseScenarioPackage(parsed) {
   const list = Array.isArray(parsed) ? parsed : parsed.scenarios;
   if (!Array.isArray(list)) throw new Error("JSONは配列、または scenarios 配列を持つ形式にしてください");
@@ -1410,7 +2087,7 @@ async function loadScenarioFile(file) {
 }
 
 function getScenarioKeys() {
-  return Object.keys(scenarios);
+  return Object.keys(getScenarioStore());
 }
 
 function getCompletedSet(key = activeScenarioKey) {
@@ -1418,8 +2095,18 @@ function getCompletedSet(key = activeScenarioKey) {
   return completedTasks.get(key);
 }
 
+function getNextIncompleteTaskIndex(key = activeScenarioKey) {
+  const tasks = getScenarioStore()[key].tasks;
+  const completedSet = getCompletedSet(key);
+  for (let index = 0; index < tasks.length; index += 1) {
+    if (!completedSet.has(index)) return index;
+  }
+  return -1;
+}
+
 function isScenarioComplete(key = activeScenarioKey) {
-  const taskCount = scenarios[key].tasks.length;
+  const store = getScenarioStore();
+  const taskCount = store[key].tasks.length;
   return taskCount > 0 && getCompletedSet(key).size >= taskCount;
 }
 
@@ -1430,60 +2117,20 @@ function getNextScenarioKey() {
 }
 
 function setScenario(key) {
+  const store = getScenarioStore();
+  const scenario = store[key];
   activeScenarioKey = key;
-  allowedCommands = new Set(scenarios[key].allowed);
-  if (key === "login") {
-    state.loggedIn = false;
-    state.user = "guest";
-    state.host = "browser";
-    state.cwd = "/home/student";
-    resetSshAuthState();
+  allowedCommands = new Set(scenario.allowed);
+  clearMorePaging();
+  if (activeRuntimeName === "main" && mainScenarioStartsLoggedOut(key)) {
+    ensureGuestSession();
+  } else if (scenarioStartsLoggedOut(scenario)) {
+    ensureGuestSession();
   } else if (!state.loggedIn) {
-    state.loggedIn = true;
-    state.user = "student";
-    state.host = "linux-practice";
-    state.cwd = "/home/student";
-    resetSshAuthState();
+    ensureStudentSession();
   }
   setPrompt();
   renderControls();
-}
-
-function renderControls() {
-  scenarioButtons.textContent = "";
-  Object.entries(scenarios).forEach(([key, scenario]) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = isScenarioComplete(key) ? `${scenario.label} 完了` : scenario.label;
-    button.classList.toggle("is-active", key === activeScenarioKey);
-    button.classList.toggle("is-complete", isScenarioComplete(key));
-    button.addEventListener("click", () => setScenario(key));
-    scenarioButtons.appendChild(button);
-  });
-
-  taskList.textContent = "";
-  const completedSet = getCompletedSet();
-  scenarios[activeScenarioKey].tasks.forEach((task, index) => {
-    const item = document.createElement("li");
-    item.textContent = task.text;
-    item.classList.toggle("is-done", completedSet.has(index));
-    taskList.appendChild(item);
-  });
-  updateCompletionState();
-}
-
-function updateCompletionState() {
-  const completedCount = getCompletedSet().size;
-  const taskCount = scenarios[activeScenarioKey].tasks.length;
-  const complete = isScenarioComplete();
-  const nextKey = getNextScenarioKey();
-  scenarioCompleteStatus.textContent = complete
-    ? "このシナリオの課題はすべて完了しました"
-    : `進捗: ${completedCount} / ${taskCount}`;
-  scenarioCompleteStatus.classList.toggle("is-complete", complete);
-  nextScenarioButton.hidden = !complete;
-  nextScenarioButton.disabled = !complete || !nextKey;
-  nextScenarioButton.textContent = nextKey ? `次へ: ${scenarios[nextKey].label}` : "すべて完了";
 }
 
 function nodeMatches(path, type) {
@@ -1689,29 +2336,41 @@ function validateExpectForExtendedCommands(expect, parsed, before) {
 validateExpect = validateExpectForExtendedCommands;
 
 function markTasks(input, parsed, before) {
+  const store = getScenarioStore();
   const completedSet = getCompletedSet();
-  scenarios[activeScenarioKey].tasks.forEach((task, index) => {
-    if (!completedSet.has(index) && taskIsSatisfied(task, input, parsed, before)) {
-      completedSet.add(index);
-    }
-  });
+  const nextTaskIndex = getNextIncompleteTaskIndex();
+  if (nextTaskIndex < 0) {
+    renderControls();
+    return;
+  }
+
+  const nextTask = store[activeScenarioKey].tasks[nextTaskIndex];
+  if (taskIsSatisfied(nextTask, input, parsed, before)) {
+    completedSet.add(nextTaskIndex);
+  }
   renderControls();
 }
 
-commandForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const input = commandInput.value.trim();
+function submitCurrentCommand() {
+  const { commandInput: inputElement, promptLabel: prompt } = getRuntimeElements();
+  const input = inputElement.value.trim();
   if (!input) return;
 
+  if (isPagingMore()) {
+    inputElement.value = "";
+    handleMorePagingInput(input);
+    return;
+  }
+
   if (!isAwaitingInteractiveInput()) {
-    printLine(`${promptLabel.textContent} ${input}`);
+    printLine(`${prompt.textContent} ${input}`);
     commandHistory.push(input);
     historyIndex = commandHistory.length;
   } else if (isAwaitingHostKeyConfirmation() || isAwaitingRmConfirmation()) {
     printLine(input);
   }
 
-  commandInput.value = "";
+  inputElement.value = "";
 
   try {
     if (isAwaitingHostKeyConfirmation()) {
@@ -1733,13 +2392,19 @@ commandForm.addEventListener("submit", (event) => {
         pendingRmConfirmation.before = before;
       }
       markTasks(parsed.raw, parsed, before);
-      if (parsed.command === "exit") setScenario("login");
+      if (parsed.command === "exit" && getScenarioStore().login) setScenario("login");
     }
   } catch (error) {
     printLine(error.message, "error");
   }
 
   setPrompt();
+  renderControls();
+}
+
+commandForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  submitCurrentCommand();
 });
 
 function longestCommonPrefix(values) {
@@ -1776,7 +2441,8 @@ function replaceCurrentToken(input, replacement) {
 function completeCommandInput() {
   if (isInSshDialogue()) return;
 
-  const input = commandInput.value;
+  const { commandInput: inputElement } = getRuntimeElements();
+  const input = inputElement.value;
   const normalized = input.replace(/\s+$/, (match) => match);
   const tokens = normalized.trimStart().split(/\s+/).filter(Boolean);
   const completingCommand = tokens.length <= 1 && !/\s$/.test(input);
@@ -1790,7 +2456,7 @@ function completeCommandInput() {
 
   if (candidates.length === 1) {
     const completed = completingCommand ? candidates[0] : candidates[0];
-    commandInput.value = completingCommand
+    inputElement.value = completingCommand
       ? `${completed} `
       : `${replaceCurrentToken(input, completed)}${completed.endsWith("/") ? "" : " "}`;
     return;
@@ -1798,15 +2464,33 @@ function completeCommandInput() {
 
   const prefix = longestCommonPrefix(candidates);
   if (prefix && prefix.length > currentToken.length) {
-    commandInput.value = completingCommand ? prefix : replaceCurrentToken(input, prefix);
+    inputElement.value = completingCommand ? prefix : replaceCurrentToken(input, prefix);
     return;
   }
 
-  printLine(`${promptLabel.textContent} ${input}`);
+  const { promptLabel: prompt } = getRuntimeElements();
+  printLine(`${prompt.textContent} ${input}`);
   printBlock(candidates.join("  "), "system");
 }
 
-commandInput.addEventListener("keydown", (event) => {
+function handleCommandInputKeydown(event) {
+  const { commandInput: inputElement } = getRuntimeElements();
+  if (isPagingMore()) {
+    if (event.key === "Enter" || event.key === " " || event.code === "Space") {
+      event.preventDefault();
+      inputElement.value = "";
+      handleMorePagingInput("");
+      return;
+    }
+    if (event.key.toLowerCase() === "q") {
+      event.preventDefault();
+      inputElement.value = "";
+      handleMorePagingInput("q");
+      return;
+    }
+    event.preventDefault();
+    return;
+  }
   if (event.key === "Tab") {
     event.preventDefault();
     completeCommandInput();
@@ -1815,13 +2499,18 @@ commandInput.addEventListener("keydown", (event) => {
   if (event.key === "ArrowUp") {
     event.preventDefault();
     historyIndex = Math.max(0, historyIndex - 1);
-    commandInput.value = commandHistory[historyIndex] || "";
+    inputElement.value = commandHistory[historyIndex] || "";
   }
   if (event.key === "ArrowDown") {
     event.preventDefault();
     historyIndex = Math.min(commandHistory.length, historyIndex + 1);
-    commandInput.value = commandHistory[historyIndex] || "";
+    inputElement.value = commandHistory[historyIndex] || "";
   }
+}
+
+commandInput.addEventListener("keydown", handleCommandInputKeydown);
+adminCommandInput.addEventListener("keydown", (event) => {
+  withRuntime(ADMIN_RUNTIME_NAME, () => handleCommandInputKeydown(event));
 });
 
 studentScenarioFile.addEventListener("change", async () => {
@@ -1859,15 +2548,17 @@ studentDropzone.addEventListener("drop", async (event) => {
 });
 
 nextScenarioButton.addEventListener("click", () => {
+  const store = getScenarioStore();
   const nextKey = getNextScenarioKey();
   if (!nextKey || !isScenarioComplete()) return;
   setScenario(nextKey);
-  printLine(`次のシナリオ「${scenarios[nextKey].label}」に進みました。`, "system");
+  printLine(`次のシナリオ「${store[nextKey].label}」に進みました。`, "system");
 });
 
 resetButton.addEventListener("click", () => {
   state = createInitialState();
   resetSshAuthState();
+  clearMorePaging();
   pendingRmConfirmation = null;
   knownHosts.clear();
   commandHistory = [];
@@ -1878,39 +2569,53 @@ resetButton.addEventListener("click", () => {
   boot();
 });
 
-function buildHelpText() {
-  return [
-    "使用例:",
-    "  whoami",
-    "  pwd",
-    "  ls -la",
-    "  hostname",
-    "  ls -l",
-    "  cat demo.txt",
-    "  more demo.txt",
-    "  ls -t",
-    "  ls -r documents",
-    "  ls -F documents",
-    "  mkdir -p practice/logs",
-    "  cp /etc/hosts .",
-    "  cp -r /usr/local/share sample_dir",
-    "  cp file.txt copy.txt",
-    "  rm -i sample.txt",
-    "  rm -r practice",
-    "  head -n 5 documents/lesson.txt",
-    "  tail -n 5 documents/lesson.txt",
-    "  grep -n Linux documents/lesson.txt",
-    "  wc -l documents/lesson.txt",
-    "  find . -name memo.txt",
-    "  sed s/Linux/CLI/g documents/lesson.txt",
-    "  awk '{print $1}' documents/lesson.txt",
-    "  date +%Y-%m-%d"
-  ].join("\n");
+function initializeAdminRuntime(scenario = EMPTY_ADMIN_SCENARIO, message = "") {
+  const previewScenario = scenario.tasks?.length ? scenario : EMPTY_ADMIN_SCENARIO;
+  runtimeRegistry[ADMIN_RUNTIME_NAME].scenarios = {
+    [ADMIN_PREVIEW_KEY]: previewScenario
+  };
+  runtimeRegistry[ADMIN_RUNTIME_NAME].snapshot = createRuntimeSnapshot({
+    activeScenarioKey: ADMIN_PREVIEW_KEY,
+    allowedCommands: previewScenario.allowed,
+    scenarios: runtimeRegistry[ADMIN_RUNTIME_NAME].scenarios
+  });
+
+  adminTerminalOutput.textContent = "";
+  adminCommandInput.value = "";
+
+  withRuntime(ADMIN_RUNTIME_NAME, () => {
+    setScenario(ADMIN_PREVIEW_KEY);
+    if (message) printLine(message, "system");
+    setPrompt();
+    renderControls();
+  });
+}
+
+function startAdminPreviewTest() {
+  adminScenarioError.textContent = "";
+  try {
+    const scenario = buildAdminPreviewScenario();
+    initializeAdminRuntime(scenario, `試験シナリオ「${scenario.label}」を読み込みました。`);
+    adminCommandInput.focus();
+  } catch (error) {
+    adminScenarioError.textContent = error.message;
+  }
 }
 
 helpButton.addEventListener("click", () => {
-  adminHelpContent.textContent = buildHelpText();
-  adminHelpDialog.showModal();
+  openAdminHelpDialog();
+});
+
+adminHelpPrevPage.addEventListener("click", () => {
+  if (adminHelpPaging.page === 0) return;
+  adminHelpPaging.page -= 1;
+  renderAdminHelpPage();
+});
+
+adminHelpNextPage.addEventListener("click", () => {
+  if (adminHelpPaging.page >= getAdminHelpPageCount() - 1) return;
+  adminHelpPaging.page += 1;
+  renderAdminHelpPage();
 });
 
 closeAdminHelp.addEventListener("click", () => {
@@ -1939,6 +2644,7 @@ adminPasswordForm.addEventListener("submit", (event) => {
   document.body.classList.add("admin-mode");
   adminScreen.hidden = false;
   updateAdminPreview();
+  initializeAdminRuntime();
 });
 
 closeAdminButton.addEventListener("click", () => {
@@ -1962,6 +2668,27 @@ adminScenarioForm.addEventListener("submit", (event) => {
   } catch (error) {
     adminScenarioError.textContent = error.message;
   }
+});
+
+resetAdminJson.addEventListener("click", () => {
+  resetAdminPackage();
+  adminScenarioError.textContent = "追加済みシナリオをリセットしました";
+});
+
+startAdminTest.addEventListener("click", startAdminPreviewTest);
+
+resetAdminTest.addEventListener("click", () => {
+  if (adminCommandList.value.trim()) {
+    startAdminPreviewTest();
+    return;
+  }
+  adminScenarioError.textContent = "";
+  initializeAdminRuntime();
+});
+
+adminCommandForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  withRuntime(ADMIN_RUNTIME_NAME, () => submitCurrentCommand());
 });
 
 downloadScenarioJson.addEventListener("click", () => {
@@ -1988,9 +2715,10 @@ function boot() {
   printLine("接続練習: ssh student@linux-practice", "system");
   printLine("パスワード: linux", "system");
   setPrompt();
-  commandInput.focus();
+  getRuntimeElements().commandInput.focus();
 }
 
 renderControls();
 updateAdminPreview();
+initializeAdminRuntime();
 boot();
