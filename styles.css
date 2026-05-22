@@ -342,6 +342,74 @@ h3 {
   line-height: 1.5;
 }
 
+.admin-import-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: #f9fbf8;
+}
+
+.admin-import-button {
+  color: #fff;
+  font-size: 0.95rem;
+  justify-self: end;
+}
+
+.admin-merge-status {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.admin-merge-queue {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-merge-item,
+.admin-merge-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.admin-merge-empty {
+  color: var(--muted);
+}
+
+.admin-merge-item-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-merge-item-copy span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.admin-merge-item-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-merge-actions {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+}
+
 .dialog-actions,
 .admin-actions {
   display: flex;
@@ -729,6 +797,20 @@ button.is-complete.is-active {
   }
 
   .admin-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-import-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-import-button {
+    justify-self: stretch;
+  }
+
+  .admin-merge-item,
+  .admin-merge-empty {
     align-items: flex-start;
     flex-direction: column;
   }

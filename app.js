@@ -29,6 +29,11 @@ const adminScenarioLabel = document.querySelector("#adminScenarioLabel");
 const adminCommandList = document.querySelector("#adminCommandList");
 const adminScenarioError = document.querySelector("#adminScenarioError");
 const adminJsonPreview = document.querySelector("#adminJsonPreview");
+const adminMergeFiles = document.querySelector("#adminMergeFiles");
+const adminMergeQueue = document.querySelector("#adminMergeQueue");
+const applyAdminMerge = document.querySelector("#applyAdminMerge");
+const clearAdminMergeQueue = document.querySelector("#clearAdminMergeQueue");
+const adminMergeStatus = document.querySelector("#adminMergeStatus");
 const downloadScenarioJson = document.querySelector("#downloadScenarioJson");
 const resetAdminJson = document.querySelector("#resetAdminJson");
 const startAdminTest = document.querySelector("#startAdminTest");
@@ -161,6 +166,8 @@ const adminPackage = {
   lessonTitle: "",
   scenarios: []
 };
+let adminMergeQueueItems = [];
+let adminMergeQueueCount = 0;
 
 const ADMIN_RUNTIME_NAME = "admin";
 const ADMIN_PREVIEW_KEY = "preview";
@@ -1454,6 +1461,122 @@ function updateAdminPreview() {
   adminJsonPreview.textContent = JSON.stringify(preview, null, 2);
 }
 
+function renderAdminMergeQueue() {
+  if (adminMergeQueueItems.length === 0) {
+    adminMergeQueue.innerHTML = "<li class=\"admin-merge-empty\">取り込み待ちの授業JSONはありません</li>";
+    return;
+  }
+
+  adminMergeQueue.innerHTML = adminMergeQueueItems.map((lesson, index) => {
+    const moveUpDisabled = index === 0 ? "disabled" : "";
+    const moveDownDisabled = index === adminMergeQueueItems.length - 1 ? "disabled" : "";
+    return `
+      <li class="admin-merge-item">
+        <div class="admin-merge-item-copy">
+          <strong>${lesson.title}</strong>
+          <span>${lesson.fileName} / ${lesson.scenarios.length}件のシナリオ</span>
+        </div>
+        <div class="admin-merge-item-actions">
+          <button type="button" data-action="up" data-index="${index}" ${moveUpDisabled}>上へ</button>
+          <button type="button" data-action="down" data-index="${index}" ${moveDownDisabled}>下へ</button>
+          <button type="button" data-action="remove" data-index="${index}">除外</button>
+        </div>
+      </li>`;
+  }).join("");
+}
+
+function setAdminMergeStatus(message, isLoaded = false) {
+  adminMergeStatus.textContent = message;
+  adminMergeStatus.classList.toggle("is-loaded", isLoaded);
+}
+
+function appendScenariosToAdminPackage(lesson) {
+  if (!adminLessonTitle.value.trim() && !adminPackage.lessonTitle && lesson.title) {
+    adminPackage.lessonTitle = lesson.title;
+    adminLessonTitle.value = lesson.title;
+  }
+  adminPackage.scenarios.push(...lesson.scenarios);
+}
+
+function updateAdminMergeQueueStatus(message, isLoaded = false) {
+  renderAdminMergeQueue();
+  setAdminMergeStatus(message, isLoaded);
+}
+
+function moveAdminMergeQueueItem(index, delta) {
+  const targetIndex = index + delta;
+  if (index < 0 || targetIndex < 0 || targetIndex >= adminMergeQueueItems.length) return;
+  const [item] = adminMergeQueueItems.splice(index, 1);
+  adminMergeQueueItems.splice(targetIndex, 0, item);
+  updateAdminMergeQueueStatus(`取り込み待ち一覧を並べ替えました (${adminMergeQueueItems.length}件)`);
+}
+
+function removeAdminMergeQueueItem(index) {
+  if (index < 0 || index >= adminMergeQueueItems.length) return;
+  adminMergeQueueItems.splice(index, 1);
+  if (adminMergeQueueItems.length === 0) {
+    updateAdminMergeQueueStatus("取り込み待ち一覧を空にしました");
+    return;
+  }
+  updateAdminMergeQueueStatus(`取り込み待ち一覧: ${adminMergeQueueItems.length}件`);
+}
+
+async function queueAdminScenarioFiles(fileList) {
+  const files = Array.from(fileList || []);
+  if (files.length === 0) return;
+
+  let successCount = 0;
+  let failureCount = 0;
+  const failures = [];
+
+  for (const file of files) {
+    try {
+      if (!file.name.toLowerCase().endsWith(".json")) {
+        throw new Error("JSONファイルを選択してください");
+      }
+      const text = await file.text();
+      const lesson = parseScenarioPackage(JSON.parse(text));
+      if (lesson.scenarios.length === 0) throw new Error("シナリオが入っていません");
+      adminMergeQueueCount += 1;
+      adminMergeQueueItems.push({
+        id: `merge-${Date.now()}-${adminMergeQueueCount}`,
+        fileName: file.name,
+        title: lesson.title,
+        scenarios: lesson.scenarios
+      });
+      successCount += 1;
+    } catch (error) {
+      failureCount += 1;
+      failures.push(`${file.name}: ${error.message}`);
+    }
+  }
+
+  if (successCount === 0) {
+    throw new Error(failures.join(" / ") || "統合できるJSONがありませんでした");
+  }
+
+  const totalCount = adminMergeQueueItems.length;
+  const summary = `取り込み待ち一覧: ${successCount}ファイル追加 / ${failureCount}ファイル失敗 / 現在${totalCount}件`;
+  updateAdminMergeQueueStatus(summary, totalCount > 0);
+  adminScenarioError.textContent = failureCount > 0 ? `${summary} (${failures.join(" / ")})` : summary;
+}
+
+function applyAdminMergeQueue() {
+  if (adminMergeQueueItems.length === 0) {
+    throw new Error("先に統合したい授業JSONを一覧へ追加してください");
+  }
+
+  for (const lesson of adminMergeQueueItems) {
+    appendScenariosToAdminPackage(lesson);
+  }
+
+  const mergedLessonCount = adminMergeQueueItems.length;
+  const mergedScenarioCount = adminMergeQueueItems.reduce((count, lesson) => count + lesson.scenarios.length, 0);
+  adminMergeQueueItems = [];
+  updateAdminPreview();
+  updateAdminMergeQueueStatus(`統合完了: ${mergedLessonCount}件の授業JSONから ${mergedScenarioCount}件のシナリオを追加しました`, true);
+}
+
 function downloadText(filename, text) {
   const blob = new Blob([text], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -2060,7 +2183,11 @@ function buildAdminPreviewScenario() {
 }
 
 function resetAdminPackage() {
+  adminPackage.lessonTitle = "";
   adminPackage.scenarios = [];
+  adminMergeQueueItems = [];
+  setAdminMergeStatus("まだ統合していません");
+  renderAdminMergeQueue();
   updateAdminPreview();
 }
 
@@ -2547,6 +2674,43 @@ studentDropzone.addEventListener("drop", async (event) => {
   }
 });
 
+adminMergeFiles.addEventListener("change", async () => {
+  adminScenarioError.textContent = "";
+  try {
+    await queueAdminScenarioFiles(adminMergeFiles.files);
+  } catch (error) {
+    updateAdminMergeQueueStatus(`取り込み失敗: ${error.message}`);
+    adminScenarioError.textContent = error.message;
+  } finally {
+    adminMergeFiles.value = "";
+  }
+});
+
+adminMergeQueue.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const index = Number(button.dataset.index);
+  if (Number.isNaN(index)) return;
+  const action = button.dataset.action;
+  if (action === "up") moveAdminMergeQueueItem(index, -1);
+  if (action === "down") moveAdminMergeQueueItem(index, 1);
+  if (action === "remove") removeAdminMergeQueueItem(index);
+});
+
+applyAdminMerge.addEventListener("click", () => {
+  adminScenarioError.textContent = "";
+  try {
+    applyAdminMergeQueue();
+  } catch (error) {
+    adminScenarioError.textContent = error.message;
+  }
+});
+
+clearAdminMergeQueue.addEventListener("click", () => {
+  adminMergeQueueItems = [];
+  updateAdminMergeQueueStatus("取り込み待ち一覧を空にしました");
+});
+
 nextScenarioButton.addEventListener("click", () => {
   const store = getScenarioStore();
   const nextKey = getNextScenarioKey();
@@ -2672,6 +2836,7 @@ adminScenarioForm.addEventListener("submit", (event) => {
 
 resetAdminJson.addEventListener("click", () => {
   resetAdminPackage();
+  adminLessonTitle.value = "";
   adminScenarioError.textContent = "追加済みシナリオをリセットしました";
 });
 
@@ -2720,5 +2885,6 @@ function boot() {
 
 renderControls();
 updateAdminPreview();
+renderAdminMergeQueue();
 initializeAdminRuntime();
 boot();

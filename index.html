@@ -141,6 +141,23 @@ echo done > practice/report.txt
 cat practice/report.txt</textarea>
           </label>
           <p class="note">許可コマンドと厳密判定用の期待状態は、入力されたコマンドから自動生成されます。</p>
+          <section class="admin-import-panel" aria-label="既存JSONの統合">
+            <div>
+              <p class="eyebrow">Merge JSON</p>
+              <h2>既存の授業JSONを統合する</h2>
+              <p class="note">複数の授業JSONを取り込み待ち一覧へ追加し、順番を入れ替えてから作成中のJSONへまとめられます。同じシナリオ名があっても両方残します。</p>
+            </div>
+            <label class="import-button admin-import-button">
+              <input type="file" id="adminMergeFiles" accept="application/json,.json" multiple>
+              JSONを一覧へ追加
+            </label>
+            <ul class="admin-merge-queue" id="adminMergeQueue"></ul>
+            <div class="admin-actions admin-merge-actions">
+              <button type="button" id="applyAdminMerge" class="primary-button">一覧をJSONへ統合</button>
+              <button type="button" id="clearAdminMergeQueue">取り込み待ち一覧をクリア</button>
+            </div>
+            <div class="load-status admin-merge-status" id="adminMergeStatus">まだ統合していません</div>
+          </section>
           <div class="admin-actions">
             <button type="submit" class="primary-button">シナリオを追加</button>
             <button type="button" id="downloadScenarioJson">JSONをダウンロード</button>
