@@ -353,7 +353,7 @@ h3 {
   background: #f9fbf8;
 }
 
-.admin-import-button {
+.admin-editor label.admin-import-button {
   color: #fff;
   font-size: 0.95rem;
   justify-self: end;
