@@ -1435,6 +1435,14 @@ function normalizeTask(task) {
   return { text, command, expect: task.expect || {} };
 }
 
+function normalizeScenarioFiles(files) {
+  if (!files || typeof files !== "object" || Array.isArray(files)) return {};
+  return Object.fromEntries(Object.entries(files).map(([path, content]) => {
+    const normalizedPath = normalizePath(String(path), "/home/student");
+    return [normalizedPath, String(content)];
+  }));
+}
+
 function normalizeScenario(candidate) {
   if (!candidate || typeof candidate !== "object") throw new Error("シナリオの形式が正しくありません");
   const label = String(candidate.label || candidate.name || "").trim();
@@ -1447,7 +1455,7 @@ function normalizeScenario(candidate) {
     ? candidate.tasks.map(normalizeTask)
     : [];
   if (tasks.length === 0) throw new Error(`${label}: 課題がありません`);
-  return { label, allowed, tasks };
+  return { label, allowed, files: normalizeScenarioFiles(candidate.files), tasks };
 }
 
 function addScenario(candidate, options = {}) {
@@ -2460,6 +2468,13 @@ function getNextScenarioKey() {
   return keys[index + 1] || "";
 }
 
+function applyScenarioFiles(scenario) {
+  if (!scenario?.files) return;
+  Object.entries(scenario.files).forEach(([path, content]) => {
+    writeFile(path, content);
+  });
+}
+
 function setScenario(key) {
   const store = getScenarioStore();
   const scenario = store[key];
@@ -2473,6 +2488,7 @@ function setScenario(key) {
   } else if (!state.loggedIn) {
     ensureStudentSession();
   }
+  applyScenarioFiles(scenario);
   setPrompt();
   renderControls();
 }

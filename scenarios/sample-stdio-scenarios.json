@@ -53,7 +53,14 @@
       "allowed": ["cat", "help", "clear"],
       "tasks": [
         {
-          "text": "cat missing.txt 2> error.log で標準エラー出力だけを保存する",
+          "text": "cat missing.txt 2>&1 を実行し、存在しないファイルを指定したときのエラーも画面側に流せることを確認する",
+          "command": "cat missing.txt 2>&1",
+          "expect": {
+            "stdout": "cat: missing.txt: No such file or directory\n"
+          }
+        },
+        {
+          "text": "cat missing.txt 2> error.log を実行し、画面に出ていた標準エラー出力だけを error.log に保存する",
           "command": "cat missing.txt 2> error.log",
           "expect": {
             "file": "/home/student/error.log",
@@ -61,7 +68,15 @@
           }
         },
         {
-          "text": "cat missing.txt > all.log 2>&1 で標準出力と標準エラー出力をまとめる",
+          "text": "cat error.log を実行し、2> で保存したエラー内容をファイルから読み取れることを確認する",
+          "command": "cat error.log",
+          "expect": {
+            "file": "/home/student/error.log",
+            "content": "cat: missing.txt: No such file or directory\n"
+          }
+        },
+        {
+          "text": "cat missing.txt > all.log 2>&1 を実行し、標準出力の保存先 all.log に標準エラー出力もまとめる",
           "command": "cat missing.txt > all.log 2>&1",
           "expect": {
             "file": "/home/student/all.log",
@@ -69,7 +84,15 @@
           }
         },
         {
-          "text": "cat missing.txt &> both.log で標準出力と標準エラー出力をまとめる",
+          "text": "cat all.log を実行し、2>&1 でまとめたエラー内容が all.log に入っていることを確認する",
+          "command": "cat all.log",
+          "expect": {
+            "file": "/home/student/all.log",
+            "content": "cat: missing.txt: No such file or directory\n"
+          }
+        },
+        {
+          "text": "cat missing.txt &> both.log を実行し、&> でも標準出力と標準エラー出力を1つのファイルにまとめられることを確認する",
           "command": "cat missing.txt &> both.log",
           "expect": {
             "file": "/home/student/both.log",
@@ -77,7 +100,7 @@
           }
         },
         {
-          "text": "cat missing.txt >& merged.log で標準出力と標準エラー出力をまとめる",
+          "text": "cat missing.txt >& merged.log を実行し、>& でも同じように出力をまとめられることを確認する",
           "command": "cat missing.txt >& merged.log",
           "expect": {
             "file": "/home/student/merged.log",
@@ -91,30 +114,56 @@
       "allowed": ["cat", "grep", "wc", "tee", "echo", "help", "clear"],
       "tasks": [
         {
-          "text": "cat documents/lesson.txt | grep SSH でパイプ経由の検索を行う",
+          "text": "cat documents/lesson.txt を実行し、これからパイプで渡す元データの内容を確認する",
+          "command": "cat documents/lesson.txt",
+          "expect": {
+            "file": "/home/student/documents/lesson.txt",
+            "content": "Today's goal: SSH login, pwd, cd, and cat.\n"
+          }
+        },
+        {
+          "text": "cat documents/lesson.txt | grep SSH を実行し、cat の標準出力を grep の標準入力へ渡して検索する",
           "command": "cat documents/lesson.txt | grep SSH",
           "expect": {
             "stdout": "Today's goal: SSH login, pwd, cd, and cat.\n"
           }
         },
         {
-          "text": "cat documents/lesson.txt | wc -l でパイプ経由の行数を数える",
+          "text": "cat documents/lesson.txt | wc -l を実行し、cat の出力を wc に渡して行数を数える",
           "command": "cat documents/lesson.txt | wc -l",
           "expect": {
             "stdout": "1\n"
           }
         },
         {
-          "text": "cat documents/lesson.txt | tee lesson-copy.txt で表示しながら保存する",
+          "text": "cat documents/lesson.txt | tee lesson-copy.txt を実行し、画面に表示しながら同じ内容を lesson-copy.txt に保存する",
           "command": "cat documents/lesson.txt | tee lesson-copy.txt",
+          "expect": {
+            "stdout": "Today's goal: SSH login, pwd, cd, and cat.\n",
+            "file": "/home/student/lesson-copy.txt",
+            "content": "Today's goal: SSH login, pwd, cd, and cat.\n"
+          }
+        },
+        {
+          "text": "cat lesson-copy.txt を実行し、tee が作成したファイルに元データが保存されていることを確認する",
+          "command": "cat lesson-copy.txt",
           "expect": {
             "file": "/home/student/lesson-copy.txt",
             "content": "Today's goal: SSH login, pwd, cd, and cat.\n"
           }
         },
         {
-          "text": "echo second line | tee -a lesson-copy.txt で追記する",
+          "text": "echo second line | tee -a lesson-copy.txt を実行し、tee -a で画面に表示しながら既存ファイルへ追記する",
           "command": "echo second line | tee -a lesson-copy.txt",
+          "expect": {
+            "stdout": "second line\n",
+            "file": "/home/student/lesson-copy.txt",
+            "content": "Today's goal: SSH login, pwd, cd, and cat.\nsecond line\n"
+          }
+        },
+        {
+          "text": "cat lesson-copy.txt を実行し、tee -a によって2行目が追記されたことを確認する",
+          "command": "cat lesson-copy.txt",
           "expect": {
             "file": "/home/student/lesson-copy.txt",
             "content": "Today's goal: SSH login, pwd, cd, and cat.\nsecond line\n"
