@@ -1,0 +1,126 @@
+{
+  "lessonTitle": "標準入出力演習",
+  "scenarios": [
+    {
+      "label": "標準出力",
+      "allowed": ["echo", "cat", "help", "clear"],
+      "tasks": [
+        {
+          "text": "echo hello を実行して標準出力を画面に表示する",
+          "command": "echo hello",
+          "expect": {}
+        },
+        {
+          "text": "echo hello > stdout.txt で標準出力をファイルへ保存する",
+          "command": "echo hello > stdout.txt",
+          "expect": {
+            "file": "/home/student/stdout.txt",
+            "content": "hello\n"
+          }
+        },
+        {
+          "text": "cat stdout.txt で保存した内容を確認する",
+          "command": "cat stdout.txt",
+          "expect": {
+            "file": "/home/student/stdout.txt",
+            "content": "hello\n"
+          }
+        }
+      ]
+    },
+    {
+      "label": "標準入力",
+      "allowed": ["grep", "wc", "help", "clear"],
+      "tasks": [
+        {
+          "text": "wc -l < documents/lesson.txt で標準入力から行数を数える",
+          "command": "wc -l < documents/lesson.txt",
+          "expect": {
+            "stdout": "1\n"
+          }
+        },
+        {
+          "text": "grep SSH < documents/lesson.txt で標準入力から SSH を含む行を探す",
+          "command": "grep SSH < documents/lesson.txt",
+          "expect": {
+            "stdout": "Today's goal: SSH login, pwd, cd, and cat.\n"
+          }
+        }
+      ]
+    },
+    {
+      "label": "標準エラー出力",
+      "allowed": ["cat", "help", "clear"],
+      "tasks": [
+        {
+          "text": "cat missing.txt 2> error.log で標準エラー出力だけを保存する",
+          "command": "cat missing.txt 2> error.log",
+          "expect": {
+            "file": "/home/student/error.log",
+            "content": "cat: missing.txt: No such file or directory\n"
+          }
+        },
+        {
+          "text": "cat missing.txt > all.log 2>&1 で標準出力と標準エラー出力をまとめる",
+          "command": "cat missing.txt > all.log 2>&1",
+          "expect": {
+            "file": "/home/student/all.log",
+            "content": "cat: missing.txt: No such file or directory\n"
+          }
+        },
+        {
+          "text": "cat missing.txt &> both.log で標準出力と標準エラー出力をまとめる",
+          "command": "cat missing.txt &> both.log",
+          "expect": {
+            "file": "/home/student/both.log",
+            "content": "cat: missing.txt: No such file or directory\n"
+          }
+        },
+        {
+          "text": "cat missing.txt >& merged.log で標準出力と標準エラー出力をまとめる",
+          "command": "cat missing.txt >& merged.log",
+          "expect": {
+            "file": "/home/student/merged.log",
+            "content": "cat: missing.txt: No such file or directory\n"
+          }
+        }
+      ]
+    },
+    {
+      "label": "パイプとtee",
+      "allowed": ["cat", "grep", "wc", "tee", "help", "clear"],
+      "tasks": [
+        {
+          "text": "cat documents/lesson.txt | grep SSH でパイプ経由の検索を行う",
+          "command": "cat documents/lesson.txt | grep SSH",
+          "expect": {
+            "stdout": "Today's goal: SSH login, pwd, cd, and cat.\n"
+          }
+        },
+        {
+          "text": "cat documents/lesson.txt | wc -l でパイプ経由の行数を数える",
+          "command": "cat documents/lesson.txt | wc -l",
+          "expect": {
+            "stdout": "1\n"
+          }
+        },
+        {
+          "text": "cat documents/lesson.txt | tee lesson-copy.txt で表示しながら保存する",
+          "command": "cat documents/lesson.txt | tee lesson-copy.txt",
+          "expect": {
+            "file": "/home/student/lesson-copy.txt",
+            "content": "Today's goal: SSH login, pwd, cd, and cat.\n"
+          }
+        },
+        {
+          "text": "echo second line | tee -a lesson-copy.txt で追記する",
+          "command": "echo second line | tee -a lesson-copy.txt",
+          "expect": {
+            "file": "/home/student/lesson-copy.txt",
+            "content": "Today's goal: SSH login, pwd, cd, and cat.\nsecond line\n"
+          }
+        }
+      ]
+    }
+  ]
+}

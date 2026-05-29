@@ -50,7 +50,7 @@ const scenarioLoadStatus = document.querySelector("#scenarioLoadStatus");
 
 const commandCatalog = [
   "ssh", "pwd", "ls", "cd", "cat", "mkdir", "touch", "rm",
-  "cp", "mv", "echo", "more", "clear", "help", "whoami", "hostname", "exit"
+  "cp", "mv", "echo", "more", "tee", "clear", "help", "whoami", "hostname", "exit"
 ];
 const COMMAND_HELP_ENTRIES = {
   ssh: {
@@ -101,6 +101,11 @@ const COMMAND_HELP_ENTRIES = {
   more: {
     usage: "more <file>",
     options: []
+  },
+  tee: {
+    usage: "tee [-a] <file>",
+    options: ["-a"],
+    note: "標準入力を画面に表示しながらファイルにも保存します"
   },
   clear: {
     usage: "clear",
@@ -168,6 +173,9 @@ const adminPackage = {
 };
 let adminMergeQueueItems = [];
 let adminMergeQueueCount = 0;
+let outputCapture = null;
+let currentStdin = null;
+let lastCommandResult = { stdout: "", stderr: "" };
 
 const ADMIN_RUNTIME_NAME = "admin";
 const ADMIN_PREVIEW_KEY = "preview";
@@ -813,6 +821,11 @@ function handleHostKeyConfirmation(input) {
 }
 
 function printLine(text = "", type = "") {
+  if (outputCapture) {
+    const stream = type === "error" ? "stderr" : "stdout";
+    outputCapture[stream] += `${text}\n`;
+    return;
+  }
   const { terminalOutput: output } = getRuntimeElements();
   const line = document.createElement("div");
   line.className = `terminal-line ${type}`.trim();
@@ -963,14 +976,28 @@ function removePath(path) {
 }
 
 function parseCommand(input) {
-  const redirectMatch = input.match(/^echo\s+(.+?)\s*>\s*(\S+)$/);
-  if (redirectMatch) return { command: "echo", args: [redirectMatch[1], ">", redirectMatch[2]], raw: normalizeSpaces(input) };
-  const parts = input.trim().match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
+  const raw = normalizeSpaces(input);
+  const parts = tokenizeShell(input);
   return {
     command: parts[0] || "",
     args: parts.slice(1).map((part) => part.replace(/^["']|["']$/g, "")),
-    raw: normalizeSpaces(input)
+    raw,
+    shell: hasShellSyntax(parts)
   };
+}
+
+function tokenizeShell(input) {
+  const tokens = [];
+  const pattern = /2>&1|&>|>&|2>|[|<>]|(?:[^\s"'|<>]+|"[^"]*"|'[^']*')+/g;
+  let match;
+  while ((match = pattern.exec(input)) !== null) {
+    tokens.push(match[0].replace(/^["']|["']$/g, ""));
+  }
+  return tokens;
+}
+
+function hasShellSyntax(tokens) {
+  return tokens.some((token) => ["|", "<", ">", "2>", "2>&1", "&>", ">&", "&1"].includes(token));
 }
 
 function requireLogin(command) {
@@ -1021,6 +1048,8 @@ function validateExpect(expect, parsed, before) {
     if (!node || node.type !== "file") return false;
     if (expect.content !== undefined && node.content !== expect.content) return false;
   }
+  if (expect.stdout !== undefined && lastCommandResult.stdout !== expect.stdout) return false;
+  if (expect.stderr !== undefined && lastCommandResult.stderr !== expect.stderr) return false;
   if (Object.keys(expect).length > 0) return true;
 
   const { values, options } = splitOptions(parsed.args || []);
@@ -1176,7 +1205,10 @@ function runCd(args) {
 }
 
 function runCat(args) {
-  if (!args[0]) throw new Error("cat: 表示するファイルを指定してください");
+  if (!args[0]) {
+    printBlock(readStdinOrThrow("cat").replace(/\n$/, ""));
+    return;
+  }
   args.forEach((arg) => {
     const targetPath = normalizePath(arg);
     const node = state.fs[targetPath];
@@ -1294,6 +1326,10 @@ function showHelp() {
     "  mkdir practice",
     "  touch practice/note.txt",
     "  echo hello > practice/note.txt",
+    "  wc -l < documents/lesson.txt",
+    "  cat missing.txt 2> error.log",
+    "  cat documents/lesson.txt | grep SSH",
+    "  cat documents/lesson.txt | tee copy.txt",
     "  cp /etc/hosts .",
     "  rm -i sample.txt"
   ].join("\n"), "system");
@@ -1591,6 +1627,7 @@ function downloadText(filename, text) {
 
 function buildTaskText(command) {
   const parsed = parseCommand(command);
+  if (parsed.shell) return `${command} で標準入出力を練習する`;
   switch (parsed.command) {
     case "ssh":
       return `${command} を実行する`;
@@ -1707,6 +1744,8 @@ function buildTaskText(command) {
       return `${command} でコピーする`;
     case "echo":
       return `${command} で文字を書き込む`;
+    case "tee":
+      return `${command} で画面表示とファイル保存を同時に行う`;
     default:
       return `${command} を実行する`;
   }
@@ -1714,6 +1753,7 @@ function buildTaskText(command) {
 
 function buildExpectForCommand(command, context) {
   const parsed = parseCommand(command);
+  if (parsed.shell) return {};
   const { values } = splitOptions(parsed.args);
   const base = context.cwd;
   switch (parsed.command) {
@@ -1825,7 +1865,14 @@ function buildTasksFromCommandList(text) {
 }
 
 function inferAllowedFromTasks(tasks) {
-  const commands = tasks.map((task) => parseCommand(task.command).command);
+  const commands = tasks.flatMap((task) => {
+    const tokens = tokenizeShell(task.command);
+    return tokens
+      .filter((token, index) => {
+        if (!commandCatalog.includes(token)) return false;
+        return index === 0 || tokens[index - 1] === "|";
+      });
+  });
   return [...new Set([...commands, "help", "clear"])];
 }
 
@@ -1879,8 +1926,8 @@ function writeFile(path, content) {
     type: "file",
     content,
     mode: existing?.mode || "-rw-r--r--",
-    owner: existing?.owner || "root",
-    group: existing?.group || "root",
+    owner: existing?.owner || state.user,
+    group: existing?.group || state.user,
     size: content.length,
     links: existing?.links || 1,
     mtime: RECENT_LS_MTIME
@@ -1949,18 +1996,166 @@ function globToRegExp(pattern) {
   return new RegExp(`^${escaped}$`);
 }
 
+function splitPipelineTokens(tokens) {
+  const segments = [[]];
+  tokens.forEach((token) => {
+    if (token === "|") segments.push([]);
+    else segments[segments.length - 1].push(token);
+  });
+  if (segments.some((segment) => segment.length === 0)) throw new Error("syntax error near unexpected token '|'");
+  return segments;
+}
+
+function parseShellSegment(tokens) {
+  const commandTokens = [];
+  const redirects = {
+    stdin: "",
+    stdout: "",
+    stderr: "",
+    mergeStderrToStdout: false,
+    mergeBothTo: ""
+  };
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === "&1") throw new Error("syntax error: &1 is not supported");
+    if (token === "<") {
+      redirects.stdin = tokens[index + 1] || "";
+      if (!redirects.stdin) throw new Error("syntax error: missing input file");
+      index += 1;
+      continue;
+    }
+    if (token === ">") {
+      redirects.stdout = tokens[index + 1] || "";
+      if (!redirects.stdout) throw new Error("syntax error: missing output file");
+      index += 1;
+      continue;
+    }
+    if (token === "2>") {
+      redirects.stderr = tokens[index + 1] || "";
+      if (!redirects.stderr) throw new Error("syntax error: missing error output file");
+      index += 1;
+      continue;
+    }
+    if (token === "2>&1") {
+      redirects.mergeStderrToStdout = true;
+      continue;
+    }
+    if (token === "&>" || token === ">&") {
+      redirects.mergeBothTo = tokens[index + 1] || "";
+      if (!redirects.mergeBothTo) throw new Error("syntax error: missing output file");
+      index += 1;
+      continue;
+    }
+    commandTokens.push(token);
+  }
+
+  return {
+    parsed: {
+      command: commandTokens[0] || "",
+      args: commandTokens.slice(1),
+      raw: normalizeSpaces(commandTokens.join(" "))
+    },
+    redirects
+  };
+}
+
+function writeRedirect(path, content, append = false) {
+  const targetPath = normalizePath(path);
+  const previous = append ? state.fs[targetPath]?.content || "" : "";
+  writeFile(targetPath, `${previous}${content}`);
+}
+
+function captureBuiltin(parsed, stdin = null) {
+  const previousCapture = outputCapture;
+  const previousStdin = currentStdin;
+  outputCapture = { stdout: "", stderr: "" };
+  currentStdin = stdin;
+  try {
+    executeBuiltin(parsed);
+  } catch (error) {
+    outputCapture.stderr += `${error.message}\n`;
+  }
+  const result = outputCapture;
+  outputCapture = previousCapture;
+  currentStdin = previousStdin;
+  return result;
+}
+
+function executeShell(raw) {
+  if (raw.includes(">>")) throw new Error("syntax error: append redirect (>>) is not supported; use tee -a for append practice");
+  const tokens = tokenizeShell(raw);
+  const segments = splitPipelineTokens(tokens).map(parseShellSegment);
+  let stdin = null;
+  let finalResult = { stdout: "", stderr: "" };
+  let passthroughStderr = "";
+
+  segments.forEach((segment, index) => {
+    const isLast = index === segments.length - 1;
+    const { parsed, redirects } = segment;
+    if (!parsed.command) throw new Error("syntax error: missing command");
+    if (!allowedCommands.has(parsed.command)) throw new Error(`このシナリオでは ${parsed.command} は練習対象外です`);
+    requireLogin(parsed.command);
+
+    const input = redirects.stdin ? readFile(normalizePath(redirects.stdin)) : stdin;
+    const result = captureBuiltin(parsed, input);
+    if (redirects.mergeStderrToStdout) {
+      result.stdout += result.stderr;
+      result.stderr = "";
+    }
+
+    if (redirects.mergeBothTo) {
+      writeRedirect(redirects.mergeBothTo, `${result.stdout}${result.stderr}`);
+      result.stdout = "";
+      result.stderr = "";
+    } else {
+      if (redirects.stdout) {
+        writeRedirect(redirects.stdout, result.stdout);
+        result.stdout = "";
+      }
+      if (redirects.stderr) {
+        writeRedirect(redirects.stderr, result.stderr);
+        result.stderr = "";
+      }
+    }
+
+    if (isLast) {
+      finalResult = result;
+    } else {
+      stdin = result.stdout;
+      passthroughStderr += result.stderr;
+    }
+  });
+
+  finalResult.stderr = `${passthroughStderr}${finalResult.stderr}`;
+  if (finalResult.stdout) printBlock(finalResult.stdout.replace(/\n$/, ""));
+  if (finalResult.stderr) printBlock(finalResult.stderr.replace(/\n$/, ""), "error");
+  lastCommandResult = finalResult;
+}
+
+function readStdinOrThrow(commandName) {
+  if (currentStdin !== null && currentStdin !== undefined) return currentStdin;
+  throw new Error(`${commandName}: file operand required`);
+}
+
+function getTextInput(values, commandName, startIndex = 0) {
+  const files = values.slice(startIndex);
+  if (files.length === 0) return readStdinOrThrow(commandName);
+  return files.map((file) => readFile(normalizePath(file))).join("");
+}
+
 function runHead(args) {
   const count = getNumericOption(args, "n", 10);
   const file = args.filter((arg, index) => !(arg === "-n" || args[index - 1] === "-n" || /^-n\d+/.test(arg)))[0];
-  if (!file) throw new Error("head: file operand required");
-  printBlock(readFile(normalizePath(file)).split("\n").slice(0, count).join("\n").replace(/\n$/, ""));
+  const text = file ? readFile(normalizePath(file)) : readStdinOrThrow("head");
+  printBlock(text.split("\n").slice(0, count).join("\n").replace(/\n$/, ""));
 }
 
 function runTail(args) {
   const count = getNumericOption(args, "n", 10);
   const file = args.filter((arg, index) => !(arg === "-n" || args[index - 1] === "-n" || /^-n\d+/.test(arg)))[0];
-  if (!file) throw new Error("tail: file operand required");
-  const lines = readFile(normalizePath(file)).split("\n");
+  const text = file ? readFile(normalizePath(file)) : readStdinOrThrow("tail");
+  const lines = text.split("\n");
   printBlock(lines.slice(Math.max(0, lines.length - count - 1)).join("\n").replace(/\n$/, ""));
 }
 
@@ -1968,14 +2163,18 @@ function runGrep(args) {
   const { options, values } = splitOptions(args);
   const pattern = values[0];
   const files = values.slice(1);
-  if (!pattern || files.length === 0) throw new Error("grep: pattern and file required");
+  if (!pattern) throw new Error("grep: pattern required");
   const flags = hasFlag(options, "i") ? "i" : "";
   const regex = new RegExp(pattern, flags);
   const invert = hasFlag(options, "v");
   const showLine = hasFlag(options, "n");
-  files.forEach((file) => {
-    readFile(normalizePath(file)).split("\n").forEach((line, index) => {
-      if (!line && index === readFile(normalizePath(file)).split("\n").length - 1) return;
+  const sources = files.length
+    ? files.map((file) => readFile(normalizePath(file)))
+    : [readStdinOrThrow("grep")];
+  sources.forEach((text) => {
+    const lines = text.split("\n");
+    lines.forEach((line, index) => {
+      if (!line && index === lines.length - 1) return;
       const matched = regex.test(line);
       if (matched !== invert) printLine(`${showLine ? `${index + 1}:` : ""}${line}`);
     });
@@ -1985,15 +2184,14 @@ function runGrep(args) {
 function runWc(args) {
   const { options, values } = splitOptions(args);
   const file = values[0];
-  if (!file) throw new Error("wc: file operand required");
-  const text = readFile(normalizePath(file));
+  const text = file ? readFile(normalizePath(file)) : readStdinOrThrow("wc");
   const counts = {
     l: text.endsWith("\n") ? text.split("\n").length - 1 : text.split("\n").length,
     w: text.trim() ? text.trim().split(/\s+/).length : 0,
     c: text.length
   };
   const selected = options.length ? ["l", "w", "c"].filter((key) => hasFlag(options, key)) : ["l", "w", "c"];
-  printLine(`${selected.map((key) => counts[key]).join(" ")} ${file}`);
+  printLine(`${selected.map((key) => counts[key]).join(" ")}${file ? ` ${file}` : ""}`);
 }
 
 function runDate(args) {
@@ -2032,11 +2230,12 @@ function runFind(args) {
 function runSed(args) {
   const expr = args[0];
   const file = args[1];
-  if (!expr || !file) throw new Error("sed: expression and file required");
+  if (!expr) throw new Error("sed: expression required");
   const match = expr.match(/^s\/(.+)\/(.*)\/(g?)$/);
   if (!match) throw new Error("sed: only s/pattern/replacement/[g] is supported");
   const regex = new RegExp(match[1], match[3] ? "g" : "");
-  printBlock(readFile(normalizePath(file)).replace(regex, match[2]).replace(/\n$/, ""));
+  const text = file ? readFile(normalizePath(file)) : readStdinOrThrow("sed");
+  printBlock(text.replace(regex, match[2]).replace(/\n$/, ""));
 }
 
 function runAwk(args) {
@@ -2048,11 +2247,21 @@ function runAwk(args) {
   }
   const script = args[scriptIndex];
   const file = args[scriptIndex + 1];
-  if (!script || !file) throw new Error("awk: script and file required");
+  if (!script) throw new Error("awk: script required");
   const fieldMatch = script.match(/^\{print \$(\d+)\}$/);
   if (!fieldMatch) throw new Error("awk: only '{print $N}' is supported");
   const field = Number.parseInt(fieldMatch[1], 10) - 1;
-  printBlock(readFile(normalizePath(file)).split("\n").filter(Boolean).map((line) => line.split(separator)[field] || "").join("\n"));
+  const text = file ? readFile(normalizePath(file)) : readStdinOrThrow("awk");
+  printBlock(text.split("\n").filter(Boolean).map((line) => line.split(separator)[field] || "").join("\n"));
+}
+
+function runTee(args) {
+  const { options, values } = splitOptions(args);
+  if (!values[0]) throw new Error("tee: file operand required");
+  const text = readStdinOrThrow("tee");
+  const append = hasFlag(options, "a");
+  writeRedirect(values[0], text, append);
+  printBlock(text.replace(/\n$/, ""));
 }
 
 function runMore(args) {
@@ -2126,11 +2335,8 @@ function runMv(args) {
   removePathRecursive(sourcePath, true, true);
 }
 
-function execute(parsed) {
+function executeBuiltin(parsed) {
   const { command, args, raw } = parsed;
-  if (!command) return;
-  if (!allowedCommands.has(command)) throw new Error(`このシナリオでは ${command} は練習対象外です`);
-  requireLogin(command);
   switch (command) {
     case "ssh": return runSsh(args);
     case "pwd": return printLine(state.cwd);
@@ -2152,6 +2358,7 @@ function execute(parsed) {
     case "find": return runFind(args);
     case "sed": return runSed(args);
     case "awk": return runAwk(args);
+    case "tee": return runTee(args);
     case "whoami": return printLine(state.user);
     case "hostname": return printLine(state.host);
     case "exit": return runExit();
@@ -2159,6 +2366,16 @@ function execute(parsed) {
     case "help": return showHelp();
     default: throw new Error(`${raw}: command not found`);
   }
+}
+
+function execute(parsed) {
+  const { command } = parsed;
+  if (!command) return;
+  if (parsed.shell) return executeShell(parsed.raw);
+  if (!allowedCommands.has(command)) throw new Error(`このシナリオでは ${command} は練習対象外です`);
+  requireLogin(command);
+  lastCommandResult = { stdout: "", stderr: "" };
+  return executeBuiltin(parsed);
 }
 
 function buildAdminScenarioFromForm() {
@@ -2329,6 +2546,7 @@ function validateExpect(expect, parsed, before) {
 
 function normalizeCommandForComparison(commandText, base = state.cwd) {
   const parsed = parseCommand(commandText);
+  if (parsed.shell) return normalizeSpaces(commandText);
   const args = [...parsed.args];
   const pathArgIndexes = {
     cd: [0],
@@ -2358,6 +2576,7 @@ function normalizeCommandForComparison(commandText, base = state.cwd) {
 
 function normalizeCommandForComparison(commandText, base = state.cwd) {
   const parsed = parseCommand(commandText);
+  if (parsed.shell) return normalizeSpaces(commandText);
   const { options, values } = splitOptions(parsed.args);
   const normalizeValueIndexes = {
     cd: [0],
@@ -2408,6 +2627,8 @@ function validateExpectForExtendedCommands(expect, parsed, before) {
     if (!node || node.type !== "file") return false;
     if (expect.content !== undefined && node.content !== expect.content) return false;
   }
+  if (expect.stdout !== undefined && lastCommandResult.stdout !== expect.stdout) return false;
+  if (expect.stderr !== undefined && lastCommandResult.stderr !== expect.stderr) return false;
   if (Object.keys(expect).length > 0) return true;
 
   const { values } = splitOptions(parsed.args || []);
