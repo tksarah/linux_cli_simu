@@ -176,6 +176,7 @@ let adminMergeQueueCount = 0;
 let outputCapture = null;
 let currentStdin = null;
 let lastCommandResult = { stdout: "", stderr: "" };
+let commandOutputCapture = null;
 
 const ADMIN_RUNTIME_NAME = "admin";
 const ADMIN_PREVIEW_KEY = "preview";
@@ -825,6 +826,10 @@ function printLine(text = "", type = "") {
     const stream = type === "error" ? "stderr" : "stdout";
     outputCapture[stream] += `${text}\n`;
     return;
+  }
+  if (commandOutputCapture) {
+    const stream = type === "error" ? "stderr" : "stdout";
+    commandOutputCapture[stream] += `${text}\n`;
   }
   const { terminalOutput: output } = getRuntimeElements();
   const line = document.createElement("div");
@@ -2749,7 +2754,13 @@ function submitCurrentCommand() {
     } else {
       const parsed = parseCommand(input);
       const before = snapshotState();
-      execute(parsed);
+      commandOutputCapture = { stdout: "", stderr: "" };
+      try {
+        execute(parsed);
+        lastCommandResult = commandOutputCapture;
+      } finally {
+        commandOutputCapture = null;
+      }
       if (pendingRmConfirmation && parsed.command === "rm") {
         pendingRmConfirmation.taskInput = parsed.raw;
         pendingRmConfirmation.taskParsed = parsed;
