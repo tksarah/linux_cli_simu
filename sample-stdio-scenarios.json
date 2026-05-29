@@ -88,7 +88,7 @@
     },
     {
       "label": "パイプとtee",
-      "allowed": ["cat", "grep", "wc", "tee", "help", "clear"],
+      "allowed": ["cat", "grep", "wc", "tee", "echo", "help", "clear"],
       "tasks": [
         {
           "text": "cat documents/lesson.txt | grep SSH でパイプ経由の検索を行う",
