@@ -758,13 +758,18 @@ function getMainScenarioGroups() {
     .filter((group) => group.keys.length > 0);
 }
 
-function getFirstIncompleteScenarioKey() {
-  return getScenarioKeys().find((key) => !isScenarioComplete(key)) || "";
+function findScenarioGroupForKey(key) {
+  return getMainScenarioGroups().find((group) => group.keys.includes(key)) || null;
+}
+
+function getFirstIncompleteScenarioKeyInGroup(group) {
+  return group?.keys.find((key) => !isScenarioComplete(key)) || "";
 }
 
 function isScenarioUnlocked(key) {
   if (activeRuntimeName !== "main") return true;
-  const keys = getScenarioKeys();
+  const group = findScenarioGroupForKey(key);
+  const keys = group?.keys || [];
   const index = keys.indexOf(key);
   if (index < 0) return false;
   return keys.slice(0, index).every((scenarioKey) => isScenarioComplete(scenarioKey));
@@ -783,12 +788,12 @@ function getScenarioGroupStatus(group, expanded) {
   const progress = getScenarioGroupProgress(group);
   if (progress.isComplete) return "完了";
   if (expanded) return "実施中";
-  if (!isScenarioUnlocked(group.keys[0])) return "ロック中";
+  if (progress.completeCount > 0) return "進行中";
   return "未実施";
 }
 
 function getScenarioGroupTargetKey(group) {
-  return group.keys.find((key) => !isScenarioComplete(key)) || group.keys[0];
+  return getFirstIncompleteScenarioKeyInGroup(group) || group.keys[0];
 }
 
 function getScenarioStateLabel(key) {
@@ -831,21 +836,18 @@ function renderMainControls() {
     const expanded = group.keys.includes(activeScenarioKey);
     const progress = getScenarioGroupProgress(group);
     const groupStatus = getScenarioGroupStatus(group, expanded);
-    const groupLocked = groupStatus === "ロック中";
 
     const groupElement = document.createElement("section");
     groupElement.className = "scenario-group";
     groupElement.classList.toggle("is-active", expanded);
     groupElement.classList.toggle("is-complete", progress.isComplete);
-    groupElement.classList.toggle("is-locked", groupLocked);
 
     const headerButton = document.createElement("button");
     headerButton.type = "button";
     headerButton.className = "scenario-group-header";
-    headerButton.disabled = groupLocked;
     headerButton.setAttribute("aria-expanded", String(expanded));
     headerButton.addEventListener("click", () => {
-      if (!groupLocked) setScenario(getScenarioGroupTargetKey(group));
+      setScenario(getScenarioGroupTargetKey(group));
     });
 
     const headerCopy = document.createElement("span");
@@ -923,7 +925,7 @@ function updateMainCompletionState() {
   scenarioCompleteStatus.classList.toggle("is-complete", complete);
   nextScenarioButton.hidden = !complete;
   nextScenarioButton.disabled = !complete || !nextKey;
-  nextScenarioButton.textContent = nextKey ? `次へ: ${store[nextKey].label}` : "すべて完了";
+  nextScenarioButton.textContent = nextKey ? `次へ: ${store[nextKey].label}` : "このファイルは完了";
 }
 
 function renderAdminControls() {
@@ -3473,14 +3475,12 @@ async function loadScenarioFile(file) {
   const text = await file.text();
   const lesson = parseScenarioPackage(JSON.parse(text));
   if (lesson.scenarios.length === 0) throw new Error("シナリオが入っていません");
-  const shouldActivateAddedScenario = !getFirstIncompleteScenarioKey();
   const keys = lesson.scenarios.map((scenario) => addScenario(scenario, { activate: false, announce: false }));
   addScenarioGroup(lesson.title, file.name, keys);
-  if (shouldActivateAddedScenario) setScenario(keys[0]);
-  else renderControls();
-  scenarioLoadStatus.textContent = `${lesson.title}: ${lesson.scenarios.length}件を追加済み。右側の順番通りに進めてください`;
+  renderControls();
+  scenarioLoadStatus.textContent = `${lesson.title}: ${lesson.scenarios.length}件を追加済み。右側から実施するファイルを選べます`;
   scenarioLoadStatus.classList.add("is-loaded");
-  printLine(`教材ファイル「${lesson.title}」を追加しました。右側のシナリオを上から順番に進めてください。`, "success");
+  printLine(`教材ファイル「${lesson.title}」を追加しました。右側から実施するファイルを選べます。`, "success");
 }
 
 function getScenarioKeys() {
@@ -3509,7 +3509,8 @@ function isScenarioComplete(key = activeScenarioKey) {
 }
 
 function getNextScenarioKey() {
-  const keys = getScenarioKeys();
+  const group = activeRuntimeName === "main" ? findScenarioGroupForKey(activeScenarioKey) : null;
+  const keys = group?.keys || getScenarioKeys();
   const index = keys.indexOf(activeScenarioKey);
   return keys[index + 1] || "";
 }
@@ -3527,7 +3528,7 @@ function setScenario(key, options = {}) {
   if (!scenario) return false;
   if (!options.force && !isScenarioUnlocked(key)) {
     if (options.announceLocked) {
-      const firstIncompleteKey = getFirstIncompleteScenarioKey();
+      const firstIncompleteKey = getFirstIncompleteScenarioKeyInGroup(findScenarioGroupForKey(key));
       if (firstIncompleteKey && store[firstIncompleteKey]) {
         printLine(`先に「${store[firstIncompleteKey].label}」を完了してください。`, "system");
       }
