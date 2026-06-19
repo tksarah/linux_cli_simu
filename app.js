@@ -2507,7 +2507,7 @@ function validateSudoTarget(parsed) {
   if (!allowedCommands.has(parsed.command)) throw new Error(`このシナリオでは ${parsed.command} は練習対象外です`);
 }
 
-function runSudo(args) {
+function runSudo(args, originalParsed = null) {
   const parsed = {
     command: args[0] || "",
     args: args.slice(1),
@@ -2528,10 +2528,34 @@ function runSudo(args) {
   showSudoLectureIfNeeded(state.user);
   pendingSudoCommand = {
     parsed,
+    originalParsed,
     before: snapshotState(),
     user: state.user
   };
   printLine(`[sudo] password for ${state.user}:`, "system");
+}
+
+function buildSudoTaskEvents(input, pending, parsed) {
+  const passwordEvent = {
+    taskInput: input,
+    taskParsed: { command: "sudo-password", args: [], raw: input },
+    before: pending.before
+  };
+  const originalParsed = pending.originalParsed || {
+    command: "sudo",
+    args: [parsed.command, ...(parsed.args || [])],
+    raw: normalizeSpaces(["sudo", parsed.raw].join(" "))
+  };
+  return {
+    taskEvents: [
+      passwordEvent,
+      {
+        taskInput: originalParsed.raw,
+        taskParsed: originalParsed,
+        before: pending.before
+      }
+    ]
+  };
 }
 
 function completeSudoPassword(input) {
@@ -2551,11 +2575,7 @@ function completeSudoPassword(input) {
     sudoAuthenticated = false;
     printLine(message, "error");
     lastCommandResult = { stdout: "", stderr: `${message}\n` };
-    return {
-      taskInput: input,
-      taskParsed: { command: "sudo-password", args: [], raw: input },
-      before: pending.before
-    };
+    return buildSudoTaskEvents(input, pending, pending.parsed);
   }
 
   sudoAuthenticated = true;
@@ -2568,11 +2588,7 @@ function completeSudoPassword(input) {
   } finally {
     commandOutputCapture = previousCapture;
   }
-  return {
-    taskInput: input,
-    taskParsed: { command: "sudo-password", args: [], raw: input },
-    before: pending.before
-  };
+  return buildSudoTaskEvents(input, pending, pending.parsed);
 }
 
 function switchUser(username) {
@@ -3184,7 +3200,7 @@ function executeBuiltin(parsed) {
     case "sed": return runSed(args);
     case "awk": return runAwk(args);
     case "tee": return runTee(args);
-    case "sudo": return runSudo(args);
+    case "sudo": return runSudo(args, parsed);
     case "su": return runSu(args);
     case "dnf": return runDnf(args);
     case "useradd": return runUseradd(args);
@@ -3587,14 +3603,21 @@ function markTasks(input, parsed, before) {
   const nextTaskIndex = getNextIncompleteTaskIndex();
   if (nextTaskIndex < 0) {
     renderControls();
-    return;
+    return false;
   }
 
   const nextTask = store[activeScenarioKey].tasks[nextTaskIndex];
   if (taskIsSatisfied(nextTask, input, parsed, before)) {
     completedSet.add(nextTaskIndex);
+    renderControls();
+    return true;
   }
   renderControls();
+  return false;
+}
+
+function markFirstSatisfiedTask(events) {
+  return events.some((event) => markTasks(event.taskInput, event.taskParsed, event.before));
 }
 
 function submitCurrentCommand() {
@@ -3625,8 +3648,8 @@ function submitCurrentCommand() {
       completePassword(input);
     } else if (isAwaitingSudoPassword()) {
       const pending = completeSudoPassword(input);
-      if (pending) {
-        markTasks(pending.taskInput, pending.taskParsed, pending.before);
+      if (pending?.taskEvents) {
+        markFirstSatisfiedTask(pending.taskEvents);
       }
     } else if (isAwaitingPasswdInput()) {
       const pending = completePasswdInput(input);
