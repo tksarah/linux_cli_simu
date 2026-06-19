@@ -814,6 +814,10 @@ function addScenarioGroup(title, fileName, keys) {
   });
 }
 
+function isScenarioFileNameRegistered(fileName) {
+  return scenarioGroups.some((group) => group.fileName === fileName);
+}
+
 function scrollTaskPanelToCurrentState() {
   requestAnimationFrame(() => {
     if (!taskPanel) return;
@@ -3473,6 +3477,7 @@ function parseScenarioPackage(parsed) {
 async function loadScenarioFile(file, options = {}) {
   if (!file) return null;
   if (!file.name.toLowerCase().endsWith(".json")) throw new Error("講師から配布された教材ファイルを選択してください");
+  if (isScenarioFileNameRegistered(file.name)) throw new Error(`同じファイル名「${file.name}」は既に登録されています`);
   const text = await file.text();
   const lesson = parseScenarioPackage(JSON.parse(text));
   if (lesson.scenarios.length === 0) throw new Error("シナリオが入っていません");
