@@ -33,6 +33,7 @@ const adminScenarioError = document.querySelector("#adminScenarioError");
 const adminJsonPreview = document.querySelector("#adminJsonPreview");
 const adminMergeFiles = document.querySelector("#adminMergeFiles");
 const adminMergeQueue = document.querySelector("#adminMergeQueue");
+const adminMergeDropzone = document.querySelector("#adminMergeDropzone");
 const applyAdminMerge = document.querySelector("#applyAdminMerge");
 const clearAdminMergeQueue = document.querySelector("#clearAdminMergeQueue");
 const adminMergeStatus = document.querySelector("#adminMergeStatus");
@@ -3469,8 +3470,8 @@ function parseScenarioPackage(parsed) {
   };
 }
 
-async function loadScenarioFile(file) {
-  if (!file) return;
+async function loadScenarioFile(file, options = {}) {
+  if (!file) return null;
   if (!file.name.toLowerCase().endsWith(".json")) throw new Error("講師から配布された教材ファイルを選択してください");
   const text = await file.text();
   const lesson = parseScenarioPackage(JSON.parse(text));
@@ -3478,9 +3479,50 @@ async function loadScenarioFile(file) {
   const keys = lesson.scenarios.map((scenario) => addScenario(scenario, { activate: false, announce: false }));
   addScenarioGroup(lesson.title, file.name, keys);
   renderControls();
-  scenarioLoadStatus.textContent = `${lesson.title}: ${lesson.scenarios.length}件を追加済み。右側から実施するファイルを選べます`;
+  if (options.updateStatus !== false) {
+    scenarioLoadStatus.textContent = `${lesson.title}: ${lesson.scenarios.length}件を追加済み。右側から実施するファイルを選べます`;
+    scenarioLoadStatus.classList.add("is-loaded");
+  }
+  if (options.announce !== false) {
+    printLine(`教材ファイル「${lesson.title}」を追加しました。右側から実施するファイルを選べます。`, "success");
+  }
+  return {
+    title: lesson.title,
+    fileName: file.name,
+    scenarioCount: lesson.scenarios.length
+  };
+}
+
+async function loadScenarioFiles(fileList) {
+  const files = Array.from(fileList || []);
+  if (files.length === 0) return;
+
+  const loaded = [];
+  const failures = [];
+  for (const file of files) {
+    try {
+      const result = await loadScenarioFile(file, { updateStatus: false, announce: false });
+      if (result) loaded.push(result);
+    } catch (error) {
+      failures.push(`${file.name || "ファイル"}: ${error.message}`);
+    }
+  }
+
+  if (loaded.length === 0) {
+    const message = failures.join(" / ") || "読み込める教材ファイルがありませんでした";
+    scenarioLoadStatus.textContent = `読み込み失敗: ${message}`;
+    scenarioLoadStatus.classList.remove("is-loaded");
+    printLine(`教材ファイルの読み込みエラー: ${message}`, "error");
+    return;
+  }
+
+  const scenarioCount = loaded.reduce((count, item) => count + item.scenarioCount, 0);
+  const summary = `${loaded.length}ファイル / ${scenarioCount}件のシナリオを追加済み。右側から実施するファイルを選べます`;
+  scenarioLoadStatus.textContent = failures.length > 0
+    ? `${summary}（失敗: ${failures.join(" / ")}）`
+    : summary;
   scenarioLoadStatus.classList.add("is-loaded");
-  printLine(`教材ファイル「${lesson.title}」を追加しました。右側から実施するファイルを選べます。`, "success");
+  printLine(`${summary}${failures.length > 0 ? ` 失敗: ${failures.join(" / ")}` : ""}`, failures.length > 0 ? "system" : "success");
 }
 
 function getScenarioKeys() {
@@ -4038,39 +4080,46 @@ adminCommandForm.addEventListener("click", () => {
   adminCommandInput.focus();
 });
 
+function eventHasFiles(event) {
+  return Array.from(event.dataTransfer?.types || []).includes("Files")
+    || (event.dataTransfer?.files?.length || 0) > 0;
+}
+
+function setupFileDropzone(dropzone, handleFiles) {
+  if (!dropzone) return;
+
+  dropzone.addEventListener("dragenter", (event) => {
+    if (!eventHasFiles(event)) return;
+    event.preventDefault();
+    dropzone.classList.add("is-dragging");
+  });
+
+  dropzone.addEventListener("dragover", (event) => {
+    if (!eventHasFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    dropzone.classList.add("is-dragging");
+  });
+
+  dropzone.addEventListener("dragleave", (event) => {
+    if (event.relatedTarget && dropzone.contains(event.relatedTarget)) return;
+    dropzone.classList.remove("is-dragging");
+  });
+
+  dropzone.addEventListener("drop", async (event) => {
+    if (!eventHasFiles(event)) return;
+    event.preventDefault();
+    dropzone.classList.remove("is-dragging");
+    await handleFiles(event.dataTransfer.files);
+  });
+}
+
 studentScenarioFile.addEventListener("change", async () => {
-  const file = studentScenarioFile.files[0];
-  try {
-    await loadScenarioFile(file);
-  } catch (error) {
-    scenarioLoadStatus.textContent = `読み込み失敗: ${error.message}`;
-    scenarioLoadStatus.classList.remove("is-loaded");
-    printLine(`教材ファイルの読み込みエラー: ${error.message}`, "error");
-  } finally {
-    studentScenarioFile.value = "";
-  }
+  await loadScenarioFiles(studentScenarioFile.files);
+  studentScenarioFile.value = "";
 });
 
-studentDropzone.addEventListener("dragover", (event) => {
-  event.preventDefault();
-  studentDropzone.classList.add("is-dragging");
-});
-
-studentDropzone.addEventListener("dragleave", () => {
-  studentDropzone.classList.remove("is-dragging");
-});
-
-studentDropzone.addEventListener("drop", async (event) => {
-  event.preventDefault();
-  studentDropzone.classList.remove("is-dragging");
-  try {
-    await loadScenarioFile(event.dataTransfer.files[0]);
-  } catch (error) {
-    scenarioLoadStatus.textContent = `読み込み失敗: ${error.message}`;
-    scenarioLoadStatus.classList.remove("is-loaded");
-    printLine(`教材ファイルの読み込みエラー: ${error.message}`, "error");
-  }
-});
+setupFileDropzone(studentDropzone, loadScenarioFiles);
 
 adminMergeFiles.addEventListener("change", async () => {
   adminScenarioError.textContent = "";
@@ -4081,6 +4130,16 @@ adminMergeFiles.addEventListener("change", async () => {
     adminScenarioError.textContent = error.message;
   } finally {
     adminMergeFiles.value = "";
+  }
+});
+
+setupFileDropzone(adminMergeDropzone, async (files) => {
+  adminScenarioError.textContent = "";
+  try {
+    await queueAdminScenarioFiles(files);
+  } catch (error) {
+    updateAdminMergeQueueStatus(`取り込み失敗: ${error.message}`);
+    adminScenarioError.textContent = error.message;
   }
 });
 

@@ -117,15 +117,18 @@ h3 {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
   align-items: center;
-  border: 1px solid var(--line);
+  border: 1px dashed var(--line);
   border-radius: 8px;
   padding: 16px;
   background: #ffffff;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
-.student-import.is-dragging {
+.student-import.is-dragging,
+.admin-import-panel.is-dragging {
   border-color: var(--accent);
   background: #edf8f3;
+  box-shadow: 0 0 0 3px rgba(11, 107, 87, 0.1);
 }
 
 .student-import h2 {
@@ -388,10 +391,11 @@ h3 {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
   align-items: center;
-  border: 1px solid var(--line);
+  border: 1px dashed var(--line);
   border-radius: 8px;
   padding: 16px;
   background: #f9fbf8;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .admin-editor label.admin-import-button {
