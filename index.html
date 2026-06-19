@@ -18,15 +18,21 @@
         </header>
 
         <section class="student-import" id="studentDropzone">
-          <div>
+          <div class="dropzone-copy">
             <p class="eyebrow">Lesson file</p>
             <h2>講師から配布された教材ファイルを読み込む</h2>
-            <p class="import-copy">Teamsなどで配布された教材ファイルを選択、またはここへドラッグ＆ドロップしてください。複数JSONをまとめてドロップできます。</p>
+            <p class="import-copy">Teamsなどで配布された教材JSONを登録すると、右側のシナリオ一覧へ追加されます。</p>
           </div>
-          <label class="import-button">
-            <input type="file" id="studentScenarioFile" accept="application/json,.json">
-            教材ファイルを選択
-          </label>
+          <div class="drop-target" aria-label="教材JSONのドラッグ＆ドロップ領域">
+            <div class="drop-target-copy">
+              <strong>JSONファイルをここへドラッグ＆ドロップ</strong>
+              <span>複数ファイルをまとめて追加できます</span>
+            </div>
+            <label class="import-button">
+              <input type="file" id="studentScenarioFile" accept="application/json,.json">
+              教材ファイルを選択
+            </label>
+          </div>
           <div class="load-status" id="scenarioLoadStatus">教材ファイルはまだ読み込まれていません</div>
         </section>
 
@@ -144,15 +150,21 @@ cat practice/report.txt</textarea>
           </label>
           <p class="note">許可コマンドと厳密判定用の期待状態は、入力されたコマンドから自動生成されます。</p>
           <section class="admin-import-panel" id="adminMergeDropzone" aria-label="既存JSONの統合">
-            <div>
+            <div class="dropzone-copy">
               <p class="eyebrow">Merge JSON</p>
               <h2>既存の授業JSONを統合する</h2>
-              <p class="note">複数の授業JSONを選択、またはここへドラッグ＆ドロップして取り込み待ち一覧へ追加できます。順番を入れ替えてから作成中のJSONへまとめられます。</p>
+              <p class="note">複数の授業JSONを取り込み待ち一覧へ追加し、順番を入れ替えてから作成中のJSONへまとめられます。</p>
             </div>
-            <label class="import-button admin-import-button">
-              <input type="file" id="adminMergeFiles" accept="application/json,.json" multiple>
-              JSONを一覧へ追加
-            </label>
+            <div class="drop-target" aria-label="統合する授業JSONのドラッグ＆ドロップ領域">
+              <div class="drop-target-copy">
+                <strong>統合するJSONをここへドラッグ＆ドロップ</strong>
+                <span>複数ファイルをまとめて取り込み待ちへ追加できます</span>
+              </div>
+              <label class="import-button admin-import-button">
+                <input type="file" id="adminMergeFiles" accept="application/json,.json" multiple>
+                JSONを一覧へ追加
+              </label>
+            </div>
             <ul class="admin-merge-queue" id="adminMergeQueue"></ul>
             <div class="admin-actions admin-merge-actions">
               <button type="button" id="applyAdminMerge" class="primary-button">一覧をJSONへ統合</button>
