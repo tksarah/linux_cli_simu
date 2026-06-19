@@ -30,7 +30,7 @@
           <div class="load-status" id="scenarioLoadStatus">教材ファイルはまだ読み込まれていません</div>
         </section>
 
-        <section class="task-panel" aria-label="現在の課題">
+        <section class="task-panel" id="taskPanel" aria-label="現在の課題">
           <div>
             <p class="eyebrow">Current tasks</p>
             <h2>現在の課題</h2>
@@ -51,7 +51,7 @@
             <div class="terminal-output" id="terminalOutput" role="log" aria-live="polite"></div>
             <form class="command-line" id="commandForm" autocomplete="off">
               <label id="promptLabel" for="commandInput">$</label>
-              <input id="commandInput" name="command" spellcheck="false" autofocus>
+              <input id="commandInput" name="command" spellcheck="false" placeholder="ここにコマンドを入力" aria-label="コマンド入力" autofocus>
             </form>
           </div>
         </div>
@@ -68,7 +68,7 @@
           <h2>シナリオ</h2>
         </div>
         <section class="control-block">
-          <div class="segmented" id="scenarioButtons" role="tablist" aria-label="シナリオ"></div>
+          <div class="scenario-groups" id="scenarioButtons" aria-label="シナリオ"></div>
         </section>
       </aside>
     </main>
@@ -197,7 +197,7 @@ cat practice/report.txt</textarea>
                 <div class="terminal-output" id="adminTerminalOutput"></div>
                 <form class="command-line" id="adminCommandForm" autocomplete="off">
                   <span id="adminPromptLabel">local &gt; </span>
-                  <input id="adminCommandInput" type="text" spellcheck="false" placeholder="ここで作成中シナリオを試します">
+                  <input id="adminCommandInput" type="text" spellcheck="false" placeholder="ここで作成中シナリオを試します" aria-label="試験用コマンド入力">
                 </form>
               </div>
             </div>

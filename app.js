@@ -5,6 +5,7 @@ const commandInput = document.querySelector("#commandInput");
 const promptLabel = document.querySelector("#promptLabel");
 const sessionStatus = document.querySelector("#sessionStatus");
 const scenarioButtons = document.querySelector("#scenarioButtons");
+const taskPanel = document.querySelector("#taskPanel");
 const taskList = document.querySelector("#taskList");
 const scenarioCompleteStatus = document.querySelector("#scenarioCompleteStatus");
 const nextScenarioButton = document.querySelector("#nextScenarioButton");
@@ -271,6 +272,15 @@ const scenarios = {
     ]
   }
 };
+
+const scenarioGroups = [
+  {
+    id: "default-scenarios",
+    title: "標準シナリオ",
+    fileName: "内蔵",
+    keys: Object.keys(scenarios)
+  }
+];
 
 const DEFAULT_LS_MTIME = new Date("2022-02-22T00:00:00Z");
 const RECENT_LS_MTIME = new Date("2026-05-04T00:00:00Z");
@@ -543,6 +553,7 @@ let pendingMorePaging = null;
 let sshPasswordAttemptsRemaining = 0;
 let knownHosts = new Set();
 let customScenarioCount = 0;
+let scenarioGroupCount = 0;
 let completedTasks = new Map();
 let activeRuntimeName = "main";
 let adminHelpPaging = {
@@ -732,17 +743,161 @@ function ensureStudentSession() {
   ensureUserSession("student");
 }
 
+function getMainScenarioKeys() {
+  const store = runtimeRegistry.main.scenarios || scenarios;
+  return scenarioGroups.flatMap((group) => group.keys).filter((key) => store[key]);
+}
+
+function getMainScenarioGroups() {
+  const store = runtimeRegistry.main.scenarios || scenarios;
+  return scenarioGroups
+    .map((group) => ({
+      ...group,
+      keys: group.keys.filter((key) => store[key])
+    }))
+    .filter((group) => group.keys.length > 0);
+}
+
+function getFirstIncompleteScenarioKey() {
+  return getScenarioKeys().find((key) => !isScenarioComplete(key)) || "";
+}
+
+function isScenarioUnlocked(key) {
+  if (activeRuntimeName !== "main") return true;
+  const keys = getScenarioKeys();
+  const index = keys.indexOf(key);
+  if (index < 0) return false;
+  return keys.slice(0, index).every((scenarioKey) => isScenarioComplete(scenarioKey));
+}
+
+function getScenarioGroupProgress(group) {
+  const completeCount = group.keys.filter((key) => isScenarioComplete(key)).length;
+  return {
+    completeCount,
+    totalCount: group.keys.length,
+    isComplete: completeCount === group.keys.length
+  };
+}
+
+function getScenarioGroupStatus(group, expanded) {
+  const progress = getScenarioGroupProgress(group);
+  if (progress.isComplete) return "完了";
+  if (expanded) return "実施中";
+  if (!isScenarioUnlocked(group.keys[0])) return "ロック中";
+  return "未実施";
+}
+
+function getScenarioGroupTargetKey(group) {
+  return group.keys.find((key) => !isScenarioComplete(key)) || group.keys[0];
+}
+
+function getScenarioStateLabel(key) {
+  if (isScenarioComplete(key)) return "完了";
+  if (key === activeScenarioKey) return "実施中";
+  if (!isScenarioUnlocked(key)) return "ロック中";
+  return "未実施";
+}
+
+function addScenarioGroup(title, fileName, keys) {
+  scenarioGroupCount += 1;
+  scenarioGroups.push({
+    id: `lesson-${Date.now()}-${scenarioGroupCount}`,
+    title: title || "授業シナリオ",
+    fileName: fileName || "教材JSON",
+    keys
+  });
+}
+
+function scrollTaskPanelToCurrentState() {
+  requestAnimationFrame(() => {
+    if (!taskPanel) return;
+    if (isScenarioComplete()) {
+      taskPanel.scrollTop = taskPanel.scrollHeight;
+      return;
+    }
+
+    const firstIncompleteItem = taskList.querySelector("li:not(.is-done)");
+    if (firstIncompleteItem) {
+      firstIncompleteItem.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  });
+}
+
 function renderMainControls() {
   const store = getScenarioStore();
   scenarioButtons.textContent = "";
-  Object.entries(store).forEach(([key, scenario]) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = isScenarioComplete(key) ? `${scenario.label} 完了` : scenario.label;
-    button.classList.toggle("is-active", key === activeScenarioKey);
-    button.classList.toggle("is-complete", isScenarioComplete(key));
-    button.addEventListener("click", () => setScenario(key));
-    scenarioButtons.appendChild(button);
+
+  getMainScenarioGroups().forEach((group) => {
+    const expanded = group.keys.includes(activeScenarioKey);
+    const progress = getScenarioGroupProgress(group);
+    const groupStatus = getScenarioGroupStatus(group, expanded);
+    const groupLocked = groupStatus === "ロック中";
+
+    const groupElement = document.createElement("section");
+    groupElement.className = "scenario-group";
+    groupElement.classList.toggle("is-active", expanded);
+    groupElement.classList.toggle("is-complete", progress.isComplete);
+    groupElement.classList.toggle("is-locked", groupLocked);
+
+    const headerButton = document.createElement("button");
+    headerButton.type = "button";
+    headerButton.className = "scenario-group-header";
+    headerButton.disabled = groupLocked;
+    headerButton.setAttribute("aria-expanded", String(expanded));
+    headerButton.addEventListener("click", () => {
+      if (!groupLocked) setScenario(getScenarioGroupTargetKey(group));
+    });
+
+    const headerCopy = document.createElement("span");
+    headerCopy.className = "scenario-group-copy";
+
+    const title = document.createElement("strong");
+    title.textContent = group.title;
+    headerCopy.appendChild(title);
+
+    const meta = document.createElement("span");
+    meta.textContent = `${group.fileName} / ${progress.completeCount} / ${progress.totalCount} 完了`;
+    headerCopy.appendChild(meta);
+
+    const status = document.createElement("span");
+    status.className = "scenario-group-status";
+    status.textContent = groupStatus;
+
+    headerButton.append(headerCopy, status);
+    groupElement.appendChild(headerButton);
+
+    if (expanded) {
+      const list = document.createElement("div");
+      list.className = "scenario-group-list";
+      group.keys.forEach((key, index) => {
+        const scenario = store[key];
+        const unlocked = isScenarioUnlocked(key);
+        const complete = isScenarioComplete(key);
+        const active = key === activeScenarioKey;
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "scenario-row";
+        row.disabled = !unlocked;
+        row.classList.toggle("is-active", active);
+        row.classList.toggle("is-complete", complete);
+        row.classList.toggle("is-locked", !unlocked);
+        row.addEventListener("click", () => setScenario(key));
+
+        const rowTitle = document.createElement("span");
+        rowTitle.className = "scenario-row-title";
+        rowTitle.textContent = `${index + 1}. ${scenario.label}`;
+
+        const rowStatus = document.createElement("span");
+        rowStatus.className = "scenario-row-status";
+        rowStatus.textContent = getScenarioStateLabel(key);
+
+        row.append(rowTitle, rowStatus);
+        list.appendChild(row);
+      });
+      groupElement.appendChild(list);
+    }
+
+    scenarioButtons.appendChild(groupElement);
   });
 
   taskList.textContent = "";
@@ -753,16 +908,7 @@ function renderMainControls() {
     taskList.appendChild(item);
   });
   updateMainCompletionState();
-  requestAnimationFrame(() => {
-    if (isScenarioComplete()) {
-      scenarioCompleteStatus.scrollIntoView({ block: "end", inline: "nearest" });
-      return;
-    }
-    const firstIncompleteItem = taskList.querySelector("li:not(.is-done)");
-    if (firstIncompleteItem) {
-      firstIncompleteItem.scrollIntoView({ block: "nearest", inline: "nearest" });
-    }
-  });
+  scrollTaskPanelToCurrentState();
 }
 
 function updateMainCompletionState() {
@@ -1337,7 +1483,9 @@ function completePassword(input) {
     const before = snapshotState();
     finishSshLogin();
     printLine("Welcome to Linux CLI practice.", "success");
-    markTasks(SSH_PASSWORD, { command: "password", args: [], raw: SSH_PASSWORD }, before);
+    while (markTasks(SSH_PASSWORD, { command: "password", args: [], raw: SSH_PASSWORD }, before)) {
+      // One successful password can satisfy consecutive SSH login checks.
+    }
     setPrompt();
     return;
   }
@@ -3325,14 +3473,18 @@ async function loadScenarioFile(file) {
   const text = await file.text();
   const lesson = parseScenarioPackage(JSON.parse(text));
   if (lesson.scenarios.length === 0) throw new Error("シナリオが入っていません");
+  const shouldActivateAddedScenario = !getFirstIncompleteScenarioKey();
   const keys = lesson.scenarios.map((scenario) => addScenario(scenario, { activate: false, announce: false }));
-  setScenario(keys[0]);
-  scenarioLoadStatus.textContent = `${lesson.title}: ${lesson.scenarios.length}件を読み込み済み`;
+  addScenarioGroup(lesson.title, file.name, keys);
+  if (shouldActivateAddedScenario) setScenario(keys[0]);
+  else renderControls();
+  scenarioLoadStatus.textContent = `${lesson.title}: ${lesson.scenarios.length}件を追加済み。右側の順番通りに進めてください`;
   scenarioLoadStatus.classList.add("is-loaded");
-  printLine(`教材ファイル「${lesson.title}」を読み込みました。右側のシナリオから課題を選べます。`, "success");
+  printLine(`教材ファイル「${lesson.title}」を追加しました。右側のシナリオを上から順番に進めてください。`, "success");
 }
 
 function getScenarioKeys() {
+  if (activeRuntimeName === "main") return getMainScenarioKeys();
   return Object.keys(getScenarioStore());
 }
 
@@ -3369,9 +3521,20 @@ function applyScenarioFiles(scenario) {
   });
 }
 
-function setScenario(key) {
+function setScenario(key, options = {}) {
   const store = getScenarioStore();
   const scenario = store[key];
+  if (!scenario) return false;
+  if (!options.force && !isScenarioUnlocked(key)) {
+    if (options.announceLocked) {
+      const firstIncompleteKey = getFirstIncompleteScenarioKey();
+      if (firstIncompleteKey && store[firstIncompleteKey]) {
+        printLine(`先に「${store[firstIncompleteKey].label}」を完了してください。`, "system");
+      }
+    }
+    renderControls();
+    return false;
+  }
   activeScenarioKey = key;
   allowedCommands = new Set(scenario.allowed);
   clearMorePaging();
@@ -3387,6 +3550,7 @@ function setScenario(key) {
   applyScenarioFiles(scenario);
   setPrompt();
   renderControls();
+  return true;
 }
 
 function nodeMatches(path, type) {
@@ -3730,7 +3894,9 @@ function submitCurrentCommand() {
         pendingRmConfirmation.before = before;
       }
       markTasks(parsed.raw, parsed, before);
-      if (parsed.command === "exit" && !state.loggedIn && getScenarioStore().login) setScenario("login");
+      if (parsed.command === "exit" && !state.loggedIn && getScenarioStore().login && !isScenarioComplete()) {
+        setScenario("login");
+      }
     }
   } catch (error) {
     printLine(error.message, "error");
@@ -3848,6 +4014,27 @@ function handleCommandInputKeydown(event) {
 commandInput.addEventListener("keydown", handleCommandInputKeydown);
 adminCommandInput.addEventListener("keydown", (event) => {
   withRuntime(ADMIN_RUNTIME_NAME, () => handleCommandInputKeydown(event));
+});
+
+function focusCommandInputFromTerminal(event, inputElement) {
+  if (event.target.closest("input, button, textarea, select, a")) return;
+  inputElement.focus();
+}
+
+terminalScreen.addEventListener("click", (event) => {
+  focusCommandInputFromTerminal(event, commandInput);
+});
+
+commandForm.addEventListener("click", () => {
+  commandInput.focus();
+});
+
+adminTerminalScreen.addEventListener("click", (event) => {
+  focusCommandInputFromTerminal(event, adminCommandInput);
+});
+
+adminCommandForm.addEventListener("click", () => {
+  adminCommandInput.focus();
 });
 
 studentScenarioFile.addEventListener("change", async () => {
