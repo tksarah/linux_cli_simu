@@ -47,11 +47,13 @@
             <span></span>
             <strong>student@simulator</strong>
           </div>
-          <div class="terminal-output" id="terminalOutput" role="log" aria-live="polite"></div>
-          <form class="command-line" id="commandForm" autocomplete="off">
-            <label id="promptLabel" for="commandInput">$</label>
-            <input id="commandInput" name="command" spellcheck="false" autofocus>
-          </form>
+          <div class="terminal-screen" id="terminalScreen">
+            <div class="terminal-output" id="terminalOutput" role="log" aria-live="polite"></div>
+            <form class="command-line" id="commandForm" autocomplete="off">
+              <label id="promptLabel" for="commandInput">$</label>
+              <input id="commandInput" name="command" spellcheck="false" autofocus>
+            </form>
+          </div>
         </div>
 
         <div class="student-actions">
@@ -191,11 +193,13 @@ cat practice/report.txt</textarea>
                 <span></span><span></span><span></span>
                 <strong>instructor-preview</strong>
               </div>
-              <div class="terminal-output" id="adminTerminalOutput"></div>
-              <form class="command-line" id="adminCommandForm" autocomplete="off">
-                <span id="adminPromptLabel">local &gt; </span>
-                <input id="adminCommandInput" type="text" spellcheck="false" placeholder="ここで作成中シナリオを試します">
-              </form>
+              <div class="terminal-screen" id="adminTerminalScreen">
+                <div class="terminal-output" id="adminTerminalOutput"></div>
+                <form class="command-line" id="adminCommandForm" autocomplete="off">
+                  <span id="adminPromptLabel">local &gt; </span>
+                  <input id="adminCommandInput" type="text" spellcheck="false" placeholder="ここで作成中シナリオを試します">
+                </form>
+              </div>
             </div>
             <ul class="admin-task-list" id="adminTaskList"></ul>
           </section>

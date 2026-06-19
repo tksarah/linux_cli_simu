@@ -1,4 +1,5 @@
 const terminalOutput = document.querySelector("#terminalOutput");
+const terminalScreen = document.querySelector("#terminalScreen");
 const commandForm = document.querySelector("#commandForm");
 const commandInput = document.querySelector("#commandInput");
 const promptLabel = document.querySelector("#promptLabel");
@@ -39,6 +40,7 @@ const resetAdminJson = document.querySelector("#resetAdminJson");
 const startAdminTest = document.querySelector("#startAdminTest");
 const resetAdminTest = document.querySelector("#resetAdminTest");
 const adminTerminalOutput = document.querySelector("#adminTerminalOutput");
+const adminTerminalScreen = document.querySelector("#adminTerminalScreen");
 const adminCommandForm = document.querySelector("#adminCommandForm");
 const adminCommandInput = document.querySelector("#adminCommandInput");
 const adminPromptLabel = document.querySelector("#adminPromptLabel");
@@ -580,6 +582,7 @@ const runtimeRegistry = {
   main: {
     name: "main",
     elements: {
+      terminalScreen,
       terminalOutput,
       commandInput,
       promptLabel
@@ -606,6 +609,7 @@ const runtimeRegistry = {
   [ADMIN_RUNTIME_NAME]: {
     name: ADMIN_RUNTIME_NAME,
     elements: {
+      terminalScreen: adminTerminalScreen,
       terminalOutput: adminTerminalOutput,
       commandInput: adminCommandInput,
       promptLabel: adminPromptLabel
@@ -896,7 +900,6 @@ function beginPasswordPrompt(target, preserveAttempts = false) {
   if (!preserveAttempts || sshPasswordAttemptsRemaining <= 0) {
     sshPasswordAttemptsRemaining = SSH_MAX_PASSWORD_ATTEMPTS;
   }
-  printLine(`${target}'s password:`, "system");
 }
 
 function finishSshLogin() {
@@ -912,8 +915,7 @@ function showHostKeyPrompt(target) {
   const host = target.split("@")[1] || "linux-practice";
   printBlock([
     `The authenticity of host '${host}' can't be established.`,
-    `ED25519 key fingerprint is ${SSH_HOST_FINGERPRINT}.`,
-    "Are you sure you want to continue connecting (yes/no)?"
+    `ED25519 key fingerprint is ${SSH_HOST_FINGERPRINT}.`
   ].join("\n"), "system");
 }
 
@@ -938,6 +940,34 @@ function handleHostKeyConfirmation(input) {
   printLine("Please type 'yes' or 'no'.", "error");
 }
 
+function scrollTerminalToBottom() {
+  const { terminalScreen: screen, terminalOutput: output } = getRuntimeElements();
+  const scrollTarget = screen || output;
+  if (!scrollTarget) return;
+  scrollTarget.scrollTop = scrollTarget.scrollHeight;
+}
+
+function clearTerminalOutput() {
+  const { terminalOutput: output } = getRuntimeElements();
+  output.textContent = "";
+  scrollTerminalToBottom();
+}
+
+function formatPromptedInput(promptText, input) {
+  if (!promptText) return input;
+  return `${promptText}${/\s$/.test(promptText) ? "" : " "}${input}`;
+}
+
+function printVisibleInput(input) {
+  const { promptLabel: prompt } = getRuntimeElements();
+  printLine(formatPromptedInput(prompt.textContent, input));
+}
+
+function printPromptOnly() {
+  const { promptLabel: prompt } = getRuntimeElements();
+  if (prompt.textContent) printLine(prompt.textContent);
+}
+
 function printLine(text = "", type = "") {
   if (outputCapture) {
     const stream = type === "error" ? "stderr" : "stdout";
@@ -953,7 +983,7 @@ function printLine(text = "", type = "") {
   line.className = `terminal-line ${type}`.trim();
   line.textContent = text;
   output.appendChild(line);
-  output.scrollTop = output.scrollHeight;
+  scrollTerminalToBottom();
 }
 
 function printBlock(text, type = "") {
@@ -968,6 +998,7 @@ function setMorePrompt() {
   const { promptLabel: prompt, commandInput: input } = getRuntimeElements();
   prompt.textContent = "--More--";
   input.type = "text";
+  scrollTerminalToBottom();
 }
 
 function isPagingMore() {
@@ -984,7 +1015,6 @@ function showNextMorePage() {
   paging.index = nextIndex;
 
   if (paging.index < paging.lines.length) {
-    printLine("--More--", "system");
     setMorePrompt();
     return;
   }
@@ -1008,28 +1038,47 @@ function setPrompt() {
     setMorePrompt();
     return;
   }
+  if (isAwaitingHostKeyConfirmation()) {
+    prompt.textContent = "Are you sure you want to continue connecting (yes/no)?";
+    input.type = "text";
+    updateSessionStatus();
+    scrollTerminalToBottom();
+    return;
+  }
+  if (isAwaitingRmConfirmation()) {
+    prompt.textContent = pendingRmConfirmation.prompt || "rm: remove?";
+    input.type = "text";
+    updateSessionStatus();
+    scrollTerminalToBottom();
+    return;
+  }
   if (isAwaitingPassword()) {
-    prompt.textContent = "password:";
+    prompt.textContent = `${pendingPasswordFor}'s password:`;
     input.type = "password";
     updateSessionStatus();
+    scrollTerminalToBottom();
     return;
   }
   if (isAwaitingSudoPassword()) {
-    prompt.textContent = "password:";
+    const sudoUser = pendingSudoCommand.user || state.user;
+    prompt.textContent = `[sudo] password for ${sudoUser}:`;
     input.type = "password";
     updateSessionStatus();
+    scrollTerminalToBottom();
     return;
   }
   if (isAwaitingPasswdNewPassword()) {
     prompt.textContent = "New password:";
     input.type = "password";
     updateSessionStatus();
+    scrollTerminalToBottom();
     return;
   }
   if (isAwaitingPasswdRetype()) {
     prompt.textContent = "Retype new password:";
     input.type = "password";
     updateSessionStatus();
+    scrollTerminalToBottom();
     return;
   }
 
@@ -1039,6 +1088,7 @@ function setPrompt() {
     ? `${state.user}@${state.host}:${shortPath(state.cwd)}${symbol}`
     : "local > ";
   updateSessionStatus();
+  scrollTerminalToBottom();
 }
 
 function shortPath(path) {
@@ -1176,7 +1226,7 @@ function execute(parsed) {
     case "hostname": return printLine(state.host);
     case "exit": return runExit();
     case "clear":
-      terminalOutput.textContent = "";
+      clearTerminalOutput();
       return;
     case "help": return showHelp();
     default: throw new Error(`${raw}: command not found`);
@@ -2532,7 +2582,6 @@ function runSudo(args, originalParsed = null) {
     before: snapshotState(),
     user: state.user
   };
-  printLine(`[sudo] password for ${state.user}:`, "system");
 }
 
 function buildSudoTaskEvents(input, pending, parsed) {
@@ -2657,7 +2706,6 @@ function runPasswd(args) {
     stage: "new",
     newPassword: ""
   };
-  printLine("New password:", "system");
 }
 
 function completePasswdInput(input) {
@@ -2671,7 +2719,6 @@ function completePasswdInput(input) {
       stage: "retype",
       newPassword: input
     };
-    printLine("Retype new password:", "system");
     return {
       taskInput: input,
       taskParsed: { command: "passwd-new-password", args: [], raw: input },
@@ -3150,8 +3197,12 @@ function runRm(args) {
       throw new Error(`rm: cannot remove '${values[0]}': No such file or directory`);
     }
     const typeLabel = node.type === "dir" ? "directory" : "regular file";
-    pendingRmConfirmation = { path: targetPath, recursive, force };
-    printLine(`rm: remove ${typeLabel} '${values[0]}'?`, "system");
+    pendingRmConfirmation = {
+      path: targetPath,
+      recursive,
+      force,
+      prompt: `rm: remove ${typeLabel} '${values[0]}'?`
+    };
     return;
   }
   values.forEach((arg) => removePathRecursive(normalizePath(arg), recursive, force));
@@ -3213,7 +3264,7 @@ function executeBuiltin(parsed) {
     case "whoami": return printLine(state.user);
     case "hostname": return printLine(state.host);
     case "exit": return runExit();
-    case "clear": terminalOutput.textContent = ""; return;
+    case "clear": clearTerminalOutput(); return;
     case "help": return showHelp();
     default: throw new Error(`${raw}: command not found`);
   }
@@ -3621,7 +3672,7 @@ function markFirstSatisfiedTask(events) {
 }
 
 function submitCurrentCommand() {
-  const { commandInput: inputElement, promptLabel: prompt } = getRuntimeElements();
+  const { commandInput: inputElement } = getRuntimeElements();
   const input = inputElement.value.trim();
   if (!input) return;
 
@@ -3632,11 +3683,13 @@ function submitCurrentCommand() {
   }
 
   if (!isAwaitingInteractiveInput()) {
-    printLine(`${prompt.textContent} ${input}`);
+    printVisibleInput(input);
     commandHistory.push(input);
     historyIndex = commandHistory.length;
   } else if (isAwaitingHostKeyConfirmation() || isAwaitingRmConfirmation()) {
-    printLine(input);
+    printVisibleInput(input);
+  } else if (isAwaitingPassword() || isAwaitingSudoPassword() || isAwaitingPasswdInput()) {
+    printPromptOnly();
   }
 
   inputElement.value = "";
@@ -3753,8 +3806,7 @@ function completeCommandInput() {
     return;
   }
 
-  const { promptLabel: prompt } = getRuntimeElements();
-  printLine(`${prompt.textContent} ${input}`);
+  printVisibleInput(input);
   printBlock(candidates.join("  "), "system");
 }
 
@@ -3887,7 +3939,7 @@ resetButton.addEventListener("click", () => {
   commandHistory = [];
   historyIndex = 0;
   completedTasks.clear();
-  terminalOutput.textContent = "";
+  clearTerminalOutput();
   setScenario("login");
   boot();
 });
@@ -3904,6 +3956,7 @@ function initializeAdminRuntime(scenario = EMPTY_ADMIN_SCENARIO, message = "") {
   });
 
   adminTerminalOutput.textContent = "";
+  adminTerminalScreen.scrollTop = 0;
   adminCommandInput.value = "";
 
   withRuntime(ADMIN_RUNTIME_NAME, () => {

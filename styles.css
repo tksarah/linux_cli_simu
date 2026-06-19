@@ -50,12 +50,14 @@ body.admin-mode .app-shell {
 
 .terminal-area {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto minmax(240px, 1fr) auto;
   gap: 18px;
   padding: 28px;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .topbar,
@@ -175,8 +177,8 @@ h3 {
 
 .terminal-frame {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 240px;
   border: 1px solid #26322c;
   border-radius: 8px;
   overflow: hidden;
@@ -215,7 +217,7 @@ h3 {
   font-size: 0.82rem;
 }
 
-.terminal-output {
+.terminal-screen {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -225,6 +227,10 @@ h3 {
   font-size: 0.95rem;
   line-height: 1.55;
   white-space: pre-wrap;
+}
+
+.terminal-output {
+  min-height: 0;
 }
 
 .terminal-line {
@@ -245,22 +251,30 @@ h3 {
 
 .command-line {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, auto) minmax(4ch, 1fr);
   gap: 10px;
-  align-items: center;
-  border-top: 1px solid var(--terminal-line);
-  padding: 12px 18px 16px;
-  color: var(--terminal-text);
-  font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+  align-items: baseline;
+  color: inherit;
+  font: inherit;
+  white-space: normal;
+}
+
+.command-line label,
+.command-line span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .command-line input {
   width: 100%;
+  min-width: 0;
   border: 0;
   outline: none;
   background: transparent;
   color: var(--terminal-text);
   caret-color: #a6f0ba;
+  font: inherit;
+  line-height: inherit;
 }
 
 .scenario-panel {
@@ -757,11 +771,12 @@ button.is-complete.is-active {
   }
 
   .terminal-area {
+    grid-template-rows: auto auto auto minmax(220px, 1fr) auto;
     padding: 20px;
   }
 
   .terminal-frame {
-    min-height: 0;
+    min-height: 220px;
   }
 
   .admin-layout {
