@@ -1,0 +1,203 @@
+{
+  "lessonTitle": "Linuxアクセス制御・パーミッション演習",
+  "scenarios": [
+    {
+      "label": "taro準備",
+      "initialUser": "root",
+      "allowed": ["useradd", "passwd", "help", "clear"],
+      "tasks": [
+        {
+          "text": "useradd -m taro を実行して、ホームディレクトリ付きで taro ユーザーを作成する",
+          "command": "useradd -m taro",
+          "expect": {
+            "currentUser": "root",
+            "userExists": "taro",
+            "exists": "/home/taro",
+            "type": "dir"
+          }
+        },
+        {
+          "text": "passwd taro を実行して、taro のパスワード設定を開始する",
+          "command": "passwd taro",
+          "expect": {
+            "pendingPasswdNewPassword": true
+          }
+        },
+        {
+          "text": "新しいパスワードとして techc0620 を入力する",
+          "command": "techc0620",
+          "expect": {
+            "pendingPasswdRetype": true
+          }
+        },
+        {
+          "text": "確認のため、もう一度 techc0620 を入力してパスワード設定を完了する",
+          "command": "techc0620",
+          "expect": {
+            "passwordSet": "taro"
+          }
+        }
+      ]
+    },
+    {
+      "label": "taroへ切り替え",
+      "allowed": ["su", "id", "help", "clear"],
+      "tasks": [
+        {
+          "text": "su taro を実行して、root から taro ユーザーへ切り替える",
+          "command": "su taro",
+          "expect": {
+            "currentUser": "taro",
+            "cwd": "/home/taro"
+          }
+        },
+        {
+          "text": "id を実行して、現在のユーザーが taro であることを確認する",
+          "command": "id",
+          "expect": {
+            "stdout": "uid=1002(taro) gid=1002(taro) groups=1002(taro)\n"
+          }
+        }
+      ]
+    },
+    {
+      "label": "ファイル作成と初期権限確認",
+      "allowed": ["cd", "pwd", "touch", "ls", "help", "clear"],
+      "tasks": [
+        {
+          "text": "cd ~ を実行して、taro のホームディレクトリへ移動する",
+          "command": "cd ~",
+          "expect": {
+            "cwd": "/home/taro"
+          }
+        },
+        {
+          "text": "touch sample.txt を実行して、sample.txt ファイルを作成する",
+          "command": "touch sample.txt",
+          "expect": {
+            "exists": "/home/taro/sample.txt",
+            "type": "file",
+            "fileMode": {
+              "path": "/home/taro/sample.txt",
+              "mode": "-rw-r--r--"
+            }
+          }
+        },
+        {
+          "text": "ls -l sample.txt を実行して、所有者と初期パーミッションを確認する",
+          "command": "ls -l sample.txt",
+          "expect": {
+            "stdout": "-rw-r--r-- 1 taro taro     0 May  4  2026 sample.txt\n"
+          }
+        }
+      ]
+    },
+    {
+      "label": "パーミッション変更",
+      "allowed": ["chmod", "ls", "help", "clear"],
+      "tasks": [
+        {
+          "text": "chmod 520 sample.txt を実行して、所有者を読み込み・実行、グループを書き込みのみ、その他を権限なしに変更する",
+          "command": "chmod 520 sample.txt",
+          "expect": {
+            "fileMode": {
+              "path": "/home/taro/sample.txt",
+              "mode": "-r-x-w----"
+            }
+          }
+        },
+        {
+          "text": "ls -l sample.txt を実行して、パーミッションが -r-x-w---- に変わったことを確認する",
+          "command": "ls -l sample.txt",
+          "expect": {
+            "stdout": "-r-x-w---- 1 taro taro     0 May  4  2026 sample.txt\n",
+            "fileMode": {
+              "path": "/home/taro/sample.txt",
+              "mode": "-r-x-w----"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "よく使う権限の確認",
+      "allowed": ["chmod", "ls", "help", "clear"],
+      "tasks": [
+        {
+          "text": "chmod 600 sample.txt を実行して、所有者だけが読み書きできる権限にする",
+          "command": "chmod 600 sample.txt",
+          "expect": {
+            "fileMode": {
+              "path": "/home/taro/sample.txt",
+              "mode": "-rw-------"
+            }
+          }
+        },
+        {
+          "text": "ls -l sample.txt を実行して、600 の表示を確認する",
+          "command": "ls -l sample.txt",
+          "expect": {
+            "stdout": "-rw------- 1 taro taro     0 May  4  2026 sample.txt\n"
+          }
+        },
+        {
+          "text": "chmod 644 sample.txt を実行して、所有者は読み書き、グループとその他は読み込みのみの権限にする",
+          "command": "chmod 644 sample.txt",
+          "expect": {
+            "fileMode": {
+              "path": "/home/taro/sample.txt",
+              "mode": "-rw-r--r--"
+            }
+          }
+        },
+        {
+          "text": "ls -l sample.txt を実行して、644 の表示を確認する",
+          "command": "ls -l sample.txt",
+          "expect": {
+            "stdout": "-rw-r--r-- 1 taro taro     0 May  4  2026 sample.txt\n"
+          }
+        },
+        {
+          "text": "chmod 755 sample.txt を実行して、所有者は読み書き実行、グループとその他は読み込み実行の権限にする",
+          "command": "chmod 755 sample.txt",
+          "expect": {
+            "fileMode": {
+              "path": "/home/taro/sample.txt",
+              "mode": "-rwxr-xr-x"
+            }
+          }
+        },
+        {
+          "text": "ls -l sample.txt を実行して、755 の表示を確認する",
+          "command": "ls -l sample.txt",
+          "expect": {
+            "stdout": "-rwxr-xr-x 1 taro taro     0 May  4  2026 sample.txt\n"
+          }
+        }
+      ]
+    },
+    {
+      "label": "記号形式chmod",
+      "allowed": ["chmod", "ls", "help", "clear"],
+      "tasks": [
+        {
+          "text": "chmod u=rx,g=w,o= sample.txt を実行して、記号形式でも 520 と同じ権限にできることを確認する",
+          "command": "chmod u=rx,g=w,o= sample.txt",
+          "expect": {
+            "fileMode": {
+              "path": "/home/taro/sample.txt",
+              "mode": "-r-x-w----"
+            }
+          }
+        },
+        {
+          "text": "ls -l sample.txt を実行して、記号形式の変更結果を確認する",
+          "command": "ls -l sample.txt",
+          "expect": {
+            "stdout": "-r-x-w---- 1 taro taro     0 May  4  2026 sample.txt\n"
+          }
+        }
+      ]
+    }
+  ]
+}

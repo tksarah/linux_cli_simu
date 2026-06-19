@@ -1,0 +1,203 @@
+{
+  "lessonTitle": "Linux sudo / wheel 演習",
+  "scenarios": [
+    {
+      "label": "taro準備",
+      "initialUser": "root",
+      "allowed": ["useradd", "passwd", "help", "clear"],
+      "tasks": [
+        {
+          "text": "useradd -m taro を実行して、ホームディレクトリ付きで taro ユーザーを作成する",
+          "command": "useradd -m taro",
+          "expect": {
+            "currentUser": "root",
+            "userExists": "taro",
+            "exists": "/home/taro",
+            "type": "dir"
+          }
+        },
+        {
+          "text": "passwd taro を実行して、taro のパスワード設定を開始する",
+          "command": "passwd taro",
+          "expect": {
+            "pendingPasswdNewPassword": true
+          }
+        },
+        {
+          "text": "新しいパスワードとして techc0620 を入力する",
+          "command": "techc0620",
+          "expect": {
+            "pendingPasswdRetype": true
+          }
+        },
+        {
+          "text": "確認のため、もう一度 techc0620 を入力してパスワード設定を完了する",
+          "command": "techc0620",
+          "expect": {
+            "passwordSet": "taro"
+          }
+        }
+      ]
+    },
+    {
+      "label": "taroへ切り替え",
+      "allowed": ["su", "id", "help", "clear"],
+      "tasks": [
+        {
+          "text": "su taro を実行して、root から taro ユーザーに切り替える",
+          "command": "su taro",
+          "expect": {
+            "currentUser": "taro"
+          }
+        },
+        {
+          "text": "id を実行して、現在のユーザーが taro であることを確認する",
+          "command": "id",
+          "expect": {
+            "stdout": "uid=1002(taro) gid=1002(taro) groups=1002(taro)\n"
+          }
+        }
+      ]
+    },
+    {
+      "label": "sudo失敗確認",
+      "allowed": ["sudo", "dnf", "help", "clear"],
+      "tasks": [
+        {
+          "text": "sudo dnf install tree を実行して、sudo のパスワード入力へ進む",
+          "command": "sudo dnf install tree",
+          "expect": {
+            "pendingSudoPassword": true
+          }
+        },
+        {
+          "text": "taro のパスワード techc0620 を入力し、wheel 未所属のため sudo が失敗することを確認する",
+          "command": "techc0620",
+          "expect": {
+            "sudoDenied": true
+          }
+        }
+      ]
+    },
+    {
+      "label": "rootへ戻る",
+      "allowed": ["exit", "id", "help", "clear"],
+      "tasks": [
+        {
+          "text": "exit を実行して、taro ユーザーから root に戻る",
+          "command": "exit",
+          "expect": {
+            "currentUser": "root"
+          }
+        },
+        {
+          "text": "id を実行して、現在のユーザーが root であることを確認する",
+          "command": "id",
+          "expect": {
+            "stdout": "uid=0(root) gid=0(root) groups=0(root),10(wheel)\n"
+          }
+        }
+      ]
+    },
+    {
+      "label": "wheel追加",
+      "allowed": ["usermod", "id", "help", "clear"],
+      "tasks": [
+        {
+          "text": "usermod -G wheel -a taro を実行して、taro を wheel グループに追加する",
+          "command": "usermod -G wheel -a taro",
+          "expect": {
+            "userInGroups": {
+              "user": "taro",
+              "groups": ["wheel"]
+            }
+          }
+        },
+        {
+          "text": "id taro を実行して、taro に wheel グループが追加されていることを確認する",
+          "command": "id taro",
+          "expect": {
+            "stdout": "uid=1002(taro) gid=1002(taro) groups=1002(taro),10(wheel)\n"
+          }
+        }
+      ]
+    },
+    {
+      "label": "sudo成功確認",
+      "allowed": ["su", "id", "sudo", "dnf", "help", "clear"],
+      "tasks": [
+        {
+          "text": "su taro を実行して、再度 taro ユーザーに切り替える",
+          "command": "su taro",
+          "expect": {
+            "currentUser": "taro"
+          }
+        },
+        {
+          "text": "id を実行して、現在のユーザーが taro で wheel に所属していることを確認する",
+          "command": "id",
+          "expect": {
+            "stdout": "uid=1002(taro) gid=1002(taro) groups=1002(taro),10(wheel)\n"
+          }
+        },
+        {
+          "text": "sudo dnf install tree を実行して、sudo のパスワード入力へ進む",
+          "command": "sudo dnf install tree",
+          "expect": {
+            "pendingSudoPassword": true
+          }
+        },
+        {
+          "text": "taro のパスワード techc0620 を入力し、tree をインストールできることを確認する",
+          "command": "techc0620",
+          "expect": {
+            "sudoDenied": false,
+            "packageInstalled": "tree"
+          }
+        }
+      ]
+    },
+    {
+      "label": "sudo再実行",
+      "allowed": ["sudo", "dnf", "help", "clear"],
+      "tasks": [
+        {
+          "text": "sudo dnf install tree を再実行し、tree が既にインストール済みであることを確認する",
+          "command": "sudo dnf install tree",
+          "expect": {
+            "packageInstalled": "tree",
+            "stdout": "Package tree is already installed.\n"
+          }
+        }
+      ]
+    },
+    {
+      "label": "後片付け",
+      "allowed": ["exit", "userdel", "grep", "help", "clear"],
+      "tasks": [
+        {
+          "text": "exit を実行して、taro ユーザーから root に戻る",
+          "command": "exit",
+          "expect": {
+            "currentUser": "root"
+          }
+        },
+        {
+          "text": "userdel -r taro を実行して、taro ユーザー、ホームディレクトリ、メールボックスを削除する",
+          "command": "userdel -r taro",
+          "expect": {
+            "userMissing": "taro",
+            "notExists": ["/home/taro", "/var/mail/taro"]
+          }
+        },
+        {
+          "text": "grep taro /etc/group を実行して、taro のグループエントリーが削除されたことを確認する",
+          "command": "grep taro /etc/group",
+          "expect": {
+            "stdout": ""
+          }
+        }
+      ]
+    }
+  ]
+}

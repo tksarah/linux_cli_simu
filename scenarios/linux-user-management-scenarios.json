@@ -1,0 +1,133 @@
+{
+  "lessonTitle": "Linuxユーザー管理演習",
+  "scenarios": [
+    {
+      "label": "taroユーザー作成",
+      "allowed": ["sudo", "useradd", "passwd", "help", "clear"],
+      "tasks": [
+        {
+          "text": "sudo useradd -m taro を実行して、ホームディレクトリ付きで taro ユーザーを作成する",
+          "command": "sudo useradd -m taro",
+          "expect": {
+            "pendingSudoPassword": true
+          }
+        },
+        {
+          "text": "sudo のパスワード linux を入力して、taro ユーザー作成を完了する",
+          "command": "linux",
+          "expect": {
+            "userExists": "taro",
+            "exists": "/home/taro",
+            "type": "dir"
+          }
+        },
+        {
+          "text": "sudo passwd taro を実行して、taro のパスワード設定を開始する",
+          "command": "sudo passwd taro",
+          "expect": {
+            "pendingPasswdNewPassword": true
+          }
+        },
+        {
+          "text": "新しいパスワードとして techc0620 を入力する",
+          "command": "techc0620",
+          "expect": {
+            "pendingPasswdRetype": true
+          }
+        },
+        {
+          "text": "確認のため、もう一度 techc0620 を入力してパスワード設定を完了する",
+          "command": "techc0620",
+          "expect": {
+            "passwordSet": "taro"
+          }
+        }
+      ]
+    },
+    {
+      "label": "ユーザー情報確認",
+      "allowed": ["sudo", "id", "grep", "ls", "help", "clear"],
+      "tasks": [
+        {
+          "text": "id taro を実行して、taro ユーザーのUID、GID、所属グループを確認する",
+          "command": "id taro",
+          "expect": {
+            "stdout": "uid=1002(taro) gid=1002(taro) groups=1002(taro)\n"
+          }
+        },
+        {
+          "text": "grep taro /etc/passwd を実行して、/etc/passwd の taro エントリーを確認する",
+          "command": "grep taro /etc/passwd",
+          "expect": {
+            "stdout": "taro:x:1002:1002::/home/taro:/bin/bash\n"
+          }
+        },
+        {
+          "text": "sudo grep taro /etc/shadow を実行して、/etc/shadow の taro エントリーを確認する",
+          "command": "sudo grep taro /etc/shadow",
+          "expect": {
+            "stdout": "taro:$y$j9T$linuxsim$PracticePasswordHash:19000:0:99999:7:::\n"
+          }
+        },
+        {
+          "text": "grep taro /etc/group を実行して、taro グループのエントリーを確認する",
+          "command": "grep taro /etc/group",
+          "expect": {
+            "stdout": "taro:x:1002:\n"
+          }
+        },
+        {
+          "text": "ls /home を実行して、/home/taro が作成されていることを確認する",
+          "command": "ls /home",
+          "expect": {
+            "exists": "/home/taro",
+            "type": "dir"
+          }
+        },
+        {
+          "text": "ls /var/mail を実行して、taro のメールボックスが作成されていることを確認する",
+          "command": "ls /var/mail",
+          "expect": {
+            "exists": "/var/mail/taro",
+            "type": "file"
+          }
+        }
+      ]
+    },
+    {
+      "label": "taroユーザー削除",
+      "allowed": ["sudo", "userdel", "grep", "help", "clear"],
+      "tasks": [
+        {
+          "text": "sudo userdel -r taro を実行して、taro ユーザー、ホームディレクトリ、メールボックスを削除する",
+          "command": "sudo userdel -r taro",
+          "expect": {
+            "userMissing": "taro",
+            "notExists": ["/home/taro", "/var/mail/taro"]
+          }
+        },
+        {
+          "text": "grep taro /etc/passwd を実行して、/etc/passwd から taro エントリーが消えていることを確認する",
+          "command": "grep taro /etc/passwd",
+          "expect": {
+            "stdout": ""
+          }
+        },
+        {
+          "text": "sudo grep taro /etc/shadow を実行して、/etc/shadow から taro エントリーが消えていることを確認する",
+          "command": "sudo grep taro /etc/shadow",
+          "expect": {
+            "stdout": ""
+          }
+        },
+        {
+          "text": "grep taro /etc/group を実行して、/etc/group から taro グループが消えていることを確認する",
+          "command": "grep taro /etc/group",
+          "expect": {
+            "stdout": ""
+          }
+        }
+      ]
+    }
+  ]
+}

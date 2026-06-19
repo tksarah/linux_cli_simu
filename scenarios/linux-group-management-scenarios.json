@@ -1,0 +1,202 @@
+{
+  "lessonTitle": "Linuxグループ管理演習",
+  "scenarios": [
+    {
+      "label": "hanakoユーザー作成",
+      "allowed": ["sudo", "useradd", "passwd", "help", "clear"],
+      "tasks": [
+        {
+          "text": "sudo useradd -m hanako を実行して、ホームディレクトリ付きで hanako ユーザーを作成する",
+          "command": "sudo useradd -m hanako",
+          "expect": {
+            "pendingSudoPassword": true
+          }
+        },
+        {
+          "text": "sudo のパスワード linux を入力して、hanako ユーザー作成を完了する",
+          "command": "linux",
+          "expect": {
+            "userExists": "hanako",
+            "exists": "/home/hanako",
+            "type": "dir"
+          }
+        },
+        {
+          "text": "sudo passwd hanako を実行して、hanako のパスワード設定を開始する",
+          "command": "sudo passwd hanako",
+          "expect": {
+            "pendingPasswdNewPassword": true
+          }
+        },
+        {
+          "text": "新しいパスワードとして techc0620 を入力する",
+          "command": "techc0620",
+          "expect": {
+            "pendingPasswdRetype": true
+          }
+        },
+        {
+          "text": "確認のため、もう一度 techc0620 を入力してパスワード設定を完了する",
+          "command": "techc0620",
+          "expect": {
+            "passwordSet": "hanako"
+          }
+        }
+      ]
+    },
+    {
+      "label": "グループ作成と確認",
+      "allowed": ["sudo", "groupadd", "grep", "help", "clear"],
+      "tasks": [
+        {
+          "text": "sudo groupadd techc を実行して、techc グループを作成する",
+          "command": "sudo groupadd techc",
+          "expect": {
+            "groupExists": "techc"
+          }
+        },
+        {
+          "text": "sudo groupadd hoge を実行して、hoge グループを作成する",
+          "command": "sudo groupadd hoge",
+          "expect": {
+            "groupExists": "hoge"
+          }
+        },
+        {
+          "text": "grep techc /etc/group を実行して、techc グループのエントリーを確認する",
+          "command": "grep techc /etc/group",
+          "expect": {
+            "stdout": "techc:x:1003:\n"
+          }
+        },
+        {
+          "text": "grep hoge /etc/group を実行して、hoge グループのエントリーを確認する",
+          "command": "grep hoge /etc/group",
+          "expect": {
+            "stdout": "hoge:x:1004:\n"
+          }
+        }
+      ]
+    },
+    {
+      "label": "グループ所属登録",
+      "allowed": ["sudo", "usermod", "id", "help", "clear"],
+      "tasks": [
+        {
+          "text": "sudo usermod -aG techc hanako を実行して、hanako を techc グループに追加する",
+          "command": "sudo usermod -aG techc hanako",
+          "expect": {
+            "userInGroups": {
+              "user": "hanako",
+              "groups": ["techc"]
+            }
+          }
+        },
+        {
+          "text": "sudo usermod -aG hoge hanako を実行して、hanako を hoge グループにも追加する",
+          "command": "sudo usermod -aG hoge hanako",
+          "expect": {
+            "userInGroups": {
+              "user": "hanako",
+              "groups": ["techc", "hoge"]
+            }
+          }
+        },
+        {
+          "text": "id hanako を実行して、hanako が techc と hoge に所属していることを確認する",
+          "command": "id hanako",
+          "expect": {
+            "stdout": "uid=1002(hanako) gid=1002(hanako) groups=1002(hanako),1003(techc),1004(hoge)\n"
+          }
+        }
+      ]
+    },
+    {
+      "label": "グループ所属解除と削除",
+      "allowed": ["sudo", "usermod", "groupdel", "grep", "id", "help", "clear"],
+      "tasks": [
+        {
+          "text": "sudo usermod -G techc hanako を実行して、hanako を hoge グループから外す",
+          "command": "sudo usermod -G techc hanako",
+          "expect": {
+            "userInGroups": {
+              "user": "hanako",
+              "groups": ["techc"]
+            },
+            "userNotInGroups": {
+              "user": "hanako",
+              "groups": ["hoge"]
+            }
+          }
+        },
+        {
+          "text": "id hanako を実行して、hanako から hoge グループが外れていることを確認する",
+          "command": "id hanako",
+          "expect": {
+            "stdout": "uid=1002(hanako) gid=1002(hanako) groups=1002(hanako),1003(techc)\n"
+          }
+        },
+        {
+          "text": "sudo groupdel techc を実行して、techc グループを削除する",
+          "command": "sudo groupdel techc",
+          "expect": {
+            "groupMissing": "techc",
+            "userNotInGroups": {
+              "user": "hanako",
+              "groups": ["techc"]
+            }
+          }
+        },
+        {
+          "text": "grep techc /etc/group を実行して、techc グループが削除されたことを確認する",
+          "command": "grep techc /etc/group",
+          "expect": {
+            "stdout": ""
+          }
+        },
+        {
+          "text": "id hanako を実行して、hanako から techc グループが外れたことを確認する",
+          "command": "id hanako",
+          "expect": {
+            "stdout": "uid=1002(hanako) gid=1002(hanako) groups=1002(hanako)\n"
+          }
+        }
+      ]
+    },
+    {
+      "label": "hoge確認と後片付け",
+      "allowed": ["sudo", "groupdel", "userdel", "grep", "help", "clear"],
+      "tasks": [
+        {
+          "text": "grep hoge /etc/group を実行して、所属解除後も hoge グループ自体は残っていることを確認する",
+          "command": "grep hoge /etc/group",
+          "expect": {
+            "stdout": "hoge:x:1004:\n"
+          }
+        },
+        {
+          "text": "sudo groupdel hoge を実行して、hoge グループを削除する",
+          "command": "sudo groupdel hoge",
+          "expect": {
+            "groupMissing": "hoge"
+          }
+        },
+        {
+          "text": "sudo userdel -r hanako を実行して、hanako ユーザー、ホームディレクトリ、メールボックスを削除する",
+          "command": "sudo userdel -r hanako",
+          "expect": {
+            "userMissing": "hanako",
+            "notExists": ["/home/hanako", "/var/mail/hanako"]
+          }
+        },
+        {
+          "text": "grep hanako /etc/group を実行して、hanako のプライマリグループが削除されたことを確認する",
+          "command": "grep hanako /etc/group",
+          "expect": {
+            "stdout": ""
+          }
+        }
+      ]
+    }
+  ]
+}

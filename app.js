@@ -49,8 +49,9 @@ const studentDropzone = document.querySelector("#studentDropzone");
 const scenarioLoadStatus = document.querySelector("#scenarioLoadStatus");
 
 const commandCatalog = [
-  "ssh", "pwd", "ls", "cd", "cat", "mkdir", "touch", "rm",
-  "cp", "mv", "echo", "more", "tee", "clear", "help", "whoami", "hostname", "exit"
+  "ssh", "pwd", "ls", "cd", "cat", "mkdir", "touch", "chmod", "rm",
+  "cp", "mv", "echo", "more", "tee", "clear", "help", "whoami", "hostname", "exit",
+  "sudo", "su", "dnf", "useradd", "passwd", "userdel", "id", "groupadd", "groupdel", "usermod"
 ];
 const COMMAND_HELP_ENTRIES = {
   ssh: {
@@ -81,6 +82,11 @@ const COMMAND_HELP_ENTRIES = {
   touch: {
     usage: "touch <file>",
     options: []
+  },
+  chmod: {
+    usage: "chmod <mode> <file>",
+    options: [],
+    note: "mode は 520 などの数値形式、または u=rx,g=w,o= などの記号形式を使えます。"
   },
   rm: {
     usage: "rm [-i] [-r|-R] [-f] <path>",
@@ -128,6 +134,47 @@ const COMMAND_HELP_ENTRIES = {
     usage: "exit",
     options: []
   },
+  sudo: {
+    usage: "sudo <command>",
+    options: [],
+    note: "sudo グループまたは wheel グループの所属ユーザーだけが実行できます"
+  },
+  su: {
+    usage: "su <username>",
+    options: []
+  },
+  dnf: {
+    usage: "dnf install <package>",
+    options: []
+  },
+  useradd: {
+    usage: "useradd [-m] <username>",
+    options: ["-m"]
+  },
+  passwd: {
+    usage: "passwd <username>",
+    options: []
+  },
+  userdel: {
+    usage: "userdel [-r] <username>",
+    options: ["-r"]
+  },
+  id: {
+    usage: "id <username>",
+    options: []
+  },
+  groupadd: {
+    usage: "groupadd <groupname>",
+    options: []
+  },
+  groupdel: {
+    usage: "groupdel <groupname>",
+    options: []
+  },
+  usermod: {
+    usage: "usermod [-aG <group>|-G <groups>] <username>",
+    options: ["-aG <group>", "-G <groups>"]
+  },
   head: {
     usage: "head [-n <lines>] <file>",
     options: ["-n <lines>"]
@@ -167,6 +214,10 @@ const SSH_TARGET = "student@linux-practice";
 const SSH_PASSWORD = "linux";
 const SSH_MAX_PASSWORD_ATTEMPTS = 3;
 const SSH_HOST_FINGERPRINT = "SHA256:Q8i7MZ0P1nV4m0sB8xJ9cL2rW5kT6yH3dF1pN7aS4eU";
+const SUDO_PASSWORD = SSH_PASSWORD;
+const SHADOW_PASSWORD_HASH = "$y$j9T$linuxsim$PracticePasswordHash";
+const SHADOW_LOCKED_PASSWORD = "!";
+const PASSWD_DATE_FIELD = "19000";
 const adminPackage = {
   lessonTitle: "",
   scenarios: []
@@ -273,9 +324,17 @@ function createInitialState() {
     user: "guest",
     host: "browser",
     cwd: "/home/student",
+    userStack: [],
+    userPasswords: {
+      student: SSH_PASSWORD
+    },
+    sudoLectureShownUsers: [],
+    installedPackages: [],
+    lastSudoDenied: false,
     fs: {
-      "/": createDirNode(["home", "etc", "usr", "var"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/": createDirNode(["home", "etc", "root", "usr", "var"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
       "/home": createDirNode(["student", "user01"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/root": createDirNode([], { owner: "root", group: "root", mode: "drwx------", mtime: DEFAULT_LS_MTIME }),
       "/home/student": createDirNode([".bashrc", ".hidden", "demo.txt", "documents", "long-text-simulator.txt", "old.txt", "readme.txt", "recent.txt", "sample.txt", "sample_dir"], { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
       "/home/user01": createDirNode([], { owner: "user01", group: "user01", mtime: RECENT_LS_MTIME }),
       "/home/student/.bashrc": createFileNode("# ~/.bashrc simulated\nexport PATH=$PATH:/home/student/bin\n", { owner: "student", group: "student", mtime: new Date("2021-12-01T00:00:00Z") }),
@@ -440,22 +499,26 @@ function createInitialState() {
       "/home/student/documents": createDirNode(["lesson.txt", "memo.txt"], { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
       "/home/student/documents/memo.txt": createFileNode("Class memo: commands are typed as command plus target.\n", { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
       "/home/student/documents/lesson.txt": createFileNode("Today's goal: SSH login, pwd, cd, and cat.\n", { owner: "student", group: "student", mtime: RECENT_LS_MTIME }),
-      "/etc": createDirNode(["binfmt.d", "gss", "hostname", "hosts", "netplan", "opt"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/etc": createDirNode(["binfmt.d", "group", "gss", "hostname", "hosts", "netplan", "opt", "passwd", "shadow"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
       "/etc/binfmt.d": createDirNode([], { owner: "root", group: "root", mtime: new Date("2022-04-08T00:00:00Z") }),
       "/etc/gss": createDirNode([], { owner: "root", group: "root", mtime: new Date("2022-02-22T00:00:00Z") }),
       "/etc/netplan": createDirNode([], { owner: "root", group: "root", mtime: new Date("2022-03-10T00:00:00Z") }),
       "/etc/opt": createDirNode([], { owner: "root", group: "root", mtime: new Date("2023-02-11T00:00:00Z") }),
       "/etc/hostname": createFileNode("linux-practice\n", { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
       "/etc/hosts": createFileNode("127.0.0.1 localhost\n127.0.1.1 linux-practice\n", { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/etc/passwd": createFileNode("root:x:0:0:root:/root:/bin/bash\nstudent:x:1000:1000:Student User:/home/student:/bin/bash\nuser01:x:1001:1001:Practice User:/home/user01:/bin/bash\n", { owner: "root", group: "root", mode: "-rw-r--r--", mtime: DEFAULT_LS_MTIME }),
+      "/etc/shadow": createFileNode(`root:${SHADOW_LOCKED_PASSWORD}:${PASSWD_DATE_FIELD}:0:99999:7:::\nstudent:${SHADOW_PASSWORD_HASH}:${PASSWD_DATE_FIELD}:0:99999:7:::\nuser01:${SHADOW_LOCKED_PASSWORD}:${PASSWD_DATE_FIELD}:0:99999:7:::\n`, { owner: "root", group: "shadow", mode: "-rw-------", mtime: DEFAULT_LS_MTIME }),
+      "/etc/group": createFileNode("root:x:0:\nwheel:x:10:root\nsudo:x:27:student\nmail:x:8:\nstudent:x:1000:\nuser01:x:1001:\n", { owner: "root", group: "root", mode: "-rw-r--r--", mtime: DEFAULT_LS_MTIME }),
       "/usr": createDirNode(["local"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
       "/usr/local": createDirNode(["share"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
       "/usr/local/share": createDirNode(["man", "practice.txt"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
       "/usr/local/share/man": createDirNode(["intro.txt"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
       "/usr/local/share/man/intro.txt": createFileNode("Manual page sample.\n", { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
       "/usr/local/share/practice.txt": createFileNode("Shared practice material.\n", { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
-      "/var": createDirNode(["log"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
+      "/var": createDirNode(["log", "mail"], { owner: "root", group: "root", mtime: DEFAULT_LS_MTIME }),
       "/var/log": createDirNode(["practice.log"], { owner: "root", group: "root", mtime: RECENT_LS_MTIME }),
-      "/var/log/practice.log": createFileNode("This is a simulated log file.\n", { owner: "root", group: "root", mtime: RECENT_LS_MTIME })
+      "/var/log/practice.log": createFileNode("This is a simulated log file.\n", { owner: "root", group: "root", mtime: RECENT_LS_MTIME }),
+      "/var/mail": createDirNode([], { owner: "root", group: "mail", mtime: DEFAULT_LS_MTIME })
     }
   };
 }
@@ -470,6 +533,10 @@ let historyIndex = 0;
 let pendingPasswordFor = null;
 let pendingHostKeyFor = null;
 let pendingRmConfirmation = null;
+let pendingSudoCommand = null;
+let pendingPasswdChange = null;
+let sudoAuthenticated = false;
+let privilegedCommandDepth = 0;
 let pendingMorePaging = null;
 let sshPasswordAttemptsRemaining = 0;
 let knownHosts = new Set();
@@ -499,6 +566,9 @@ function createRuntimeSnapshot(overrides = {}) {
     pendingPasswordFor: overrides.pendingPasswordFor || null,
     pendingHostKeyFor: overrides.pendingHostKeyFor || null,
     pendingRmConfirmation: overrides.pendingRmConfirmation || null,
+    pendingSudoCommand: overrides.pendingSudoCommand || null,
+    pendingPasswdChange: overrides.pendingPasswdChange || null,
+    sudoAuthenticated: overrides.sudoAuthenticated || false,
     sshPasswordAttemptsRemaining: overrides.sshPasswordAttemptsRemaining || 0,
     knownHosts: [...(overrides.knownHosts || [])],
     completedTasks: cloneCompletedTasksMap(overrides.completedTasks || new Map()),
@@ -524,6 +594,9 @@ const runtimeRegistry = {
       pendingPasswordFor,
       pendingHostKeyFor,
       pendingRmConfirmation,
+      pendingSudoCommand,
+      pendingPasswdChange,
+      sudoAuthenticated,
       sshPasswordAttemptsRemaining,
       knownHosts: [...knownHosts],
       completedTasks,
@@ -574,6 +647,9 @@ function saveRuntimeSnapshot(runtimeName = activeRuntimeName) {
     pendingPasswordFor,
     pendingHostKeyFor,
     pendingRmConfirmation,
+    pendingSudoCommand,
+    pendingPasswdChange,
+    sudoAuthenticated,
     sshPasswordAttemptsRemaining,
     knownHosts: [...knownHosts],
     completedTasks,
@@ -594,6 +670,9 @@ function loadRuntimeSnapshot(runtimeName) {
   pendingPasswordFor = snapshot.pendingPasswordFor;
   pendingHostKeyFor = snapshot.pendingHostKeyFor;
   pendingRmConfirmation = snapshot.pendingRmConfirmation;
+  pendingSudoCommand = snapshot.pendingSudoCommand;
+  pendingPasswdChange = snapshot.pendingPasswdChange;
+  sudoAuthenticated = snapshot.sudoAuthenticated;
   sshPasswordAttemptsRemaining = snapshot.sshPasswordAttemptsRemaining;
   knownHosts = new Set(snapshot.knownHosts);
   completedTasks = cloneCompletedTasksMap(snapshot.completedTasks);
@@ -625,15 +704,28 @@ function ensureGuestSession() {
   state.user = "guest";
   state.host = "browser";
   state.cwd = "/home/student";
+  state.userStack = [];
   resetSshAuthState();
+  resetPrivilegeAuthState();
+}
+
+function homeForUser(username) {
+  if (username === "root") return "/root";
+  return getUserEntry(username)?.home || `/home/${username}`;
+}
+
+function ensureUserSession(username) {
+  state.loggedIn = true;
+  state.user = username;
+  state.host = "linux-practice";
+  state.cwd = homeForUser(username);
+  state.userStack = [];
+  resetSshAuthState();
+  resetPrivilegeAuthState();
 }
 
 function ensureStudentSession() {
-  state.loggedIn = true;
-  state.user = "student";
-  state.host = "linux-practice";
-  state.cwd = "/home/student";
-  resetSshAuthState();
+  ensureUserSession("student");
 }
 
 function renderMainControls() {
@@ -732,14 +824,38 @@ function isAwaitingRmConfirmation() {
   return pendingRmConfirmation !== null;
 }
 
+function isAwaitingSudoPassword() {
+  return pendingSudoCommand !== null;
+}
+
+function isAwaitingPasswdNewPassword() {
+  return pendingPasswdChange?.stage === "new";
+}
+
+function isAwaitingPasswdRetype() {
+  return pendingPasswdChange?.stage === "retype";
+}
+
+function isAwaitingPasswdInput() {
+  return isAwaitingPasswdNewPassword() || isAwaitingPasswdRetype();
+}
+
 function isAwaitingInteractiveInput() {
-  return isInSshDialogue() || isAwaitingRmConfirmation();
+  return isInSshDialogue() || isAwaitingRmConfirmation() || isAwaitingSudoPassword() || isAwaitingPasswdInput();
 }
 
 function resetSshAuthState() {
   pendingPasswordFor = null;
   pendingHostKeyFor = null;
   sshPasswordAttemptsRemaining = 0;
+}
+
+function resetPrivilegeAuthState() {
+  pendingSudoCommand = null;
+  pendingPasswdChange = null;
+  sudoAuthenticated = false;
+  privilegedCommandDepth = 0;
+  state.lastSudoDenied = false;
 }
 
 function completeRmConfirmation(input) {
@@ -788,6 +904,7 @@ function finishSshLogin() {
   state.user = "student";
   state.host = "linux-practice";
   state.cwd = "/home/student";
+  state.userStack = [];
   resetSshAuthState();
 }
 
@@ -897,6 +1014,24 @@ function setPrompt() {
     updateSessionStatus();
     return;
   }
+  if (isAwaitingSudoPassword()) {
+    prompt.textContent = "password:";
+    input.type = "password";
+    updateSessionStatus();
+    return;
+  }
+  if (isAwaitingPasswdNewPassword()) {
+    prompt.textContent = "New password:";
+    input.type = "password";
+    updateSessionStatus();
+    return;
+  }
+  if (isAwaitingPasswdRetype()) {
+    prompt.textContent = "Retype new password:";
+    input.type = "password";
+    updateSessionStatus();
+    return;
+  }
 
   input.type = "text";
   const symbol = state.user === "root" ? "#" : "$";
@@ -907,18 +1042,22 @@ function setPrompt() {
 }
 
 function shortPath(path) {
-  return path.replace("/home/student", "~");
+  const homePath = homeForUser(state.user);
+  if (path === homePath) return "~";
+  if (path.startsWith(`${homePath}/`)) return `~/${path.slice(homePath.length + 1)}`;
+  return path;
 }
 
 function normalizeSpaces(text) {
   return String(text).trim().replace(/\s+/g, " ");
 }
 
-function normalizePath(input, base = state.cwd) {
+function normalizePath(input, base = state.cwd, username = state.user) {
   if (!input || input === ".") return base;
   let expanded = input;
-  if (expanded === "~") expanded = "/home/student";
-  else if (expanded.startsWith("~/")) expanded = `/home/student/${expanded.slice(2)}`;
+  const homePath = homeForUser(username);
+  if (expanded === "~") expanded = homePath;
+  else if (expanded.startsWith("~/")) expanded = `${homePath}/${expanded.slice(2)}`;
   const raw = expanded.startsWith("/") ? expanded : `${base}/${expanded}`;
   const parts = [];
   raw.split("/").forEach((part) => {
@@ -950,6 +1089,9 @@ function snapshotState() {
     pendingPasswordFor,
     pendingHostKeyFor,
     pendingRmConfirmation: structuredClone(pendingRmConfirmation),
+    pendingSudoCommand: structuredClone(pendingSudoCommand),
+    pendingPasswdChange: structuredClone(pendingPasswdChange),
+    sudoAuthenticated,
     sshPasswordAttemptsRemaining,
     knownHosts: [...knownHosts]
   };
@@ -1025,6 +1167,7 @@ function execute(parsed) {
     case "more": return runMore(args);
     case "mkdir": return runMkdir(args);
     case "touch": return runTouch(args);
+    case "chmod": return runChmod(args);
     case "rm": return runRm(args);
     case "cp": return runCp(args);
     case "mv": return runMv(args);
@@ -1043,6 +1186,7 @@ function execute(parsed) {
 function validateExpect(expect, parsed, before) {
   if (expect.loggedIn !== undefined && state.loggedIn !== expect.loggedIn) return false;
   if (expect.user && state.user !== expect.user) return false;
+  if (expect.currentUser && state.user !== expect.currentUser) return false;
   if (expect.host && state.host !== expect.host) return false;
   if (expect.cwd && state.cwd !== expect.cwd) return false;
   if (expect.pendingPassword && pendingPasswordFor !== "student@linux-practice") return false;
@@ -1064,13 +1208,15 @@ function validateExpect(expect, parsed, before) {
     case "password":
       return state.loggedIn && state.user === "student" && state.host === "linux-practice";
     case "cd": {
-      const target = normalizePath(values[0] || "/home/student", before.cwd);
+      const target = normalizePath(values[0] || "~", before.cwd, before.user);
       return state.cwd === target && nodeMatches(target, "dir");
     }
     case "mkdir":
       return values.every((arg) => nodeMatches(normalizePath(arg, before.cwd), "dir"));
     case "touch":
       return values.every((arg) => nodeMatches(normalizePath(arg, before.cwd), "file"));
+    case "chmod":
+      return values.slice(1).every((arg) => nodeMatches(normalizePath(arg, before.cwd, before.user)));
     case "echo": {
       const redirectIndex = parsed.args.indexOf(">");
       if (redirectIndex < 0) return true;
@@ -1202,7 +1348,7 @@ function runLs(args) {
 }
 
 function runCd(args) {
-  const targetPath = normalizePath(args[0] || "/home/student");
+  const targetPath = normalizePath(args[0] || "~");
   const node = state.fs[targetPath];
   if (!node) throw new Error(`cd: ${args[0]}: No such file or directory`);
   if (node.type !== "dir") throw new Error(`cd: ${args[0]}: Not a directory`);
@@ -1216,10 +1362,11 @@ function runCat(args) {
   }
   args.forEach((arg) => {
     const targetPath = normalizePath(arg);
-    const node = state.fs[targetPath];
-    if (!node) throw new Error(`cat: ${arg}: No such file or directory`);
-    if (node.type !== "file") throw new Error(`cat: ${arg}: Is a directory`);
-    printBlock(node.content.replace(/\n$/, ""));
+    try {
+      printBlock(readFile(targetPath).replace(/\n$/, ""));
+    } catch (error) {
+      throw new Error(`cat: ${arg}: ${error.message.replace(`${targetPath}: `, "")}`);
+    }
   });
 }
 
@@ -1248,6 +1395,74 @@ function runTouch(args) {
       existing.mtime = RECENT_LS_MTIME;
       existing.size = existing.content.length;
     }
+  });
+}
+
+function modeTypePrefix(node) {
+  return node.mode?.[0] || (node.type === "dir" ? "d" : "-");
+}
+
+function modeDigitToSegment(digit) {
+  const value = Number.parseInt(digit, 8);
+  if (Number.isNaN(value) || value < 0 || value > 7) return null;
+  return `${value & 4 ? "r" : "-"}${value & 2 ? "w" : "-"}${value & 1 ? "x" : "-"}`;
+}
+
+function numericModeToString(modeSpec, node) {
+  if (!/^[0-7]{3}$/.test(modeSpec)) return null;
+  return `${modeTypePrefix(node)}${modeSpec.split("").map(modeDigitToSegment).join("")}`;
+}
+
+function permissionListToSegment(permissionList) {
+  if (!/^[rwx]*$/.test(permissionList)) return null;
+  const permissions = new Set(permissionList.split(""));
+  return `${permissions.has("r") ? "r" : "-"}${permissions.has("w") ? "w" : "-"}${permissions.has("x") ? "x" : "-"}`;
+}
+
+function symbolicModeToString(modeSpec, node) {
+  const currentMode = node.mode || (node.type === "dir" ? "drwxr-xr-x" : "-rw-r--r--");
+  const segments = {
+    u: currentMode.slice(1, 4),
+    g: currentMode.slice(4, 7),
+    o: currentMode.slice(7, 10)
+  };
+  const clauses = modeSpec.split(",");
+  if (clauses.length === 0) return null;
+
+  for (const clause of clauses) {
+    const match = clause.match(/^([ugoa]+)=([rwx]*)$/);
+    if (!match) return null;
+    const segment = permissionListToSegment(match[2]);
+    if (segment === null) return null;
+    const classes = match[1].includes("a") ? ["u", "g", "o"] : [...new Set(match[1].split(""))];
+    classes.forEach((targetClass) => {
+      if (!segments[targetClass]) return;
+      segments[targetClass] = segment;
+    });
+  }
+
+  return `${modeTypePrefix(node)}${segments.u}${segments.g}${segments.o}`;
+}
+
+function parseChmodMode(modeSpec, node) {
+  return numericModeToString(modeSpec, node) || symbolicModeToString(modeSpec, node);
+}
+
+function runChmod(args) {
+  if (args.length < 2) throw new Error("chmod: missing operand");
+  const modeSpec = args[0];
+  const targets = args.slice(1);
+  targets.forEach((target) => {
+    const targetPath = normalizePath(target);
+    const node = state.fs[targetPath];
+    if (!node) throw new Error(`chmod: cannot access '${target}': No such file or directory`);
+    if (!isPrivilegedCommand() && node.owner !== state.user) {
+      throw new Error(`chmod: changing permissions of '${target}': Operation not permitted`);
+    }
+    const nextMode = parseChmodMode(modeSpec, node);
+    if (!nextMode) throw new Error(`chmod: invalid mode: '${modeSpec}'`);
+    node.mode = nextMode;
+    node.mtime = RECENT_LS_MTIME;
   });
 }
 
@@ -1306,12 +1521,23 @@ function runEcho(args) {
 }
 
 function runExit() {
+  if (state.userStack?.length) {
+    const previous = state.userStack.pop();
+    state.user = previous.user;
+    state.cwd = previous.cwd || homeForUser(previous.user);
+    resetPrivilegeAuthState();
+    setPrompt();
+    renderControls();
+    return;
+  }
   state.loggedIn = false;
   state.user = "guest";
   state.host = "browser";
   state.cwd = "/home/student";
+  state.userStack = [];
   pendingRmConfirmation = null;
   resetSshAuthState();
+  resetPrivilegeAuthState();
   setPrompt();
   renderControls();
   printLine("Connection to linux-practice closed.", "system");
@@ -1336,7 +1562,17 @@ function showHelp() {
     "  cat documents/lesson.txt | grep SSH",
     "  cat documents/lesson.txt | tee copy.txt",
     "  cp /etc/hosts .",
-    "  rm -i sample.txt"
+    "  rm -i sample.txt",
+    "  sudo useradd -m taro",
+    "  sudo passwd taro",
+    "  id taro",
+    "  sudo userdel -r taro",
+    "  sudo groupadd techc",
+    "  sudo usermod -aG techc hanako",
+    "  sudo usermod -G techc hanako",
+    "  sudo groupdel techc",
+    "  su taro",
+    "  sudo dnf install tree"
   ].join("\n"), "system");
 }
 
@@ -1451,6 +1687,7 @@ function normalizeScenarioFiles(files) {
 function normalizeScenario(candidate) {
   if (!candidate || typeof candidate !== "object") throw new Error("シナリオの形式が正しくありません");
   const label = String(candidate.label || candidate.name || "").trim();
+  const initialUser = String(candidate.initialUser || "").trim();
   if (!label) throw new Error("シナリオ名がありません");
   const allowed = Array.isArray(candidate.allowed)
     ? candidate.allowed.filter((command) => commandCatalog.includes(command))
@@ -1460,7 +1697,7 @@ function normalizeScenario(candidate) {
     ? candidate.tasks.map(normalizeTask)
     : [];
   if (tasks.length === 0) throw new Error(`${label}: 課題がありません`);
-  return { label, allowed, files: normalizeScenarioFiles(candidate.files), tasks };
+  return { label, allowed, initialUser, files: normalizeScenarioFiles(candidate.files), tasks };
 }
 
 function addScenario(candidate, options = {}) {
@@ -1660,6 +1897,8 @@ function buildTaskText(command) {
       return `${command} でディレクトリを作る`;
     case "touch":
       return `${command} でファイルを作る`;
+    case "chmod":
+      return `${command} でパーミッションを変更する`;
     case "echo":
       return `${command} で文字を書き込む`;
     default:
@@ -1678,7 +1917,7 @@ function buildExpectForCommand(command, context) {
     case "ls":
       return { exists: normalizePath(parsed.args[0] || base, base) };
     case "cd": {
-      const cwd = normalizePath(parsed.args[0] || "/home/student", base);
+      const cwd = normalizePath(parsed.args[0] || "~", base);
       context.cwd = cwd;
       return { cwd };
     }
@@ -1695,6 +1934,8 @@ function buildExpectForCommand(command, context) {
       if (context.files[path] === undefined) context.files[path] = "";
       return { exists: path, type: "file" };
     }
+    case "chmod":
+      return { exists: normalizePath(parsed.args[1], base) };
     case "echo": {
       const redirectIndex = parsed.args.indexOf(">");
       if (redirectIndex < 0) return {};
@@ -1751,6 +1992,8 @@ function buildTaskText(command) {
       return `${command} でディレクトリを作る`;
     case "touch":
       return `${command} でファイルを作る`;
+    case "chmod":
+      return `${command} でパーミッションを変更する`;
     case "rm":
       return `${command} で削除する`;
     case "cp":
@@ -1759,6 +2002,26 @@ function buildTaskText(command) {
       return `${command} で文字を書き込む`;
     case "tee":
       return `${command} で画面表示とファイル保存を同時に行う`;
+    case "sudo":
+      return `${command} を管理者権限で実行する`;
+    case "su":
+      return `${command} でユーザーを切り替える`;
+    case "dnf":
+      return `${command} でパッケージ操作を行う`;
+    case "useradd":
+      return `${command} でユーザーを作成する`;
+    case "passwd":
+      return `${command} でパスワードを設定する`;
+    case "userdel":
+      return `${command} でユーザーを削除する`;
+    case "id":
+      return `${command} でユーザーID情報を確認する`;
+    case "groupadd":
+      return `${command} でグループを作成する`;
+    case "groupdel":
+      return `${command} でグループを削除する`;
+    case "usermod":
+      return `${command} でユーザーのグループ所属を変更する`;
     default:
       return `${command} を実行する`;
   }
@@ -1777,7 +2040,7 @@ function buildExpectForCommand(command, context) {
     case "ls":
       return { exists: normalizePath(values[0] || base, base) };
     case "cd": {
-      const cwd = normalizePath(values[0] || "/home/student", base);
+      const cwd = normalizePath(values[0] || "~", base);
       context.cwd = cwd;
       return { cwd };
     }
@@ -1795,6 +2058,8 @@ function buildExpectForCommand(command, context) {
       if (context.files[path] === undefined) context.files[path] = "";
       return { exists: path, type: "file" };
     }
+    case "chmod":
+      return { exists: normalizePath(values[1], base) };
     case "echo": {
       const redirectIndex = parsed.args.indexOf(">");
       if (redirectIndex < 0) return {};
@@ -1825,6 +2090,26 @@ function buildExpectForCommand(command, context) {
       return { loggedIn: true, user: "student" };
     case "hostname":
       return { loggedIn: true, host: "linux-practice" };
+    case "sudo":
+      return { pendingSudoPassword: true };
+    case "su":
+      return { currentUser: values[0] || "root" };
+    case "dnf":
+      return values[1] ? { packageInstalled: values[1] } : {};
+    case "useradd":
+      return { userExists: values[0] };
+    case "passwd":
+      return { pendingPasswdNewPassword: true };
+    case "userdel":
+      return { userMissing: values[0] };
+    case "id":
+      return { userExists: values[0] || "student" };
+    case "groupadd":
+      return { groupExists: values[0] };
+    case "groupdel":
+      return { groupMissing: values[0] };
+    case "usermod":
+      return { userExists: values[values.length - 1] };
     default:
       return {};
   }
@@ -1883,7 +2168,7 @@ function inferAllowedFromTasks(tasks) {
     return tokens
       .filter((token, index) => {
         if (!commandCatalog.includes(token)) return false;
-        return index === 0 || tokens[index - 1] === "|";
+        return index === 0 || tokens[index - 1] === "|" || tokens[index - 1] === "sudo";
       });
   });
   return [...new Set([...commands, "help", "clear"])];
@@ -1929,6 +2214,7 @@ function readFile(path) {
   const node = state.fs[path];
   if (!node) throw new Error(`${path}: No such file or directory`);
   if (node.type !== "file") throw new Error(`${path}: Is a directory`);
+  if (path === "/etc/shadow" && !isPrivilegedCommand()) throw new Error(`${path}: Permission denied`);
   return node.content;
 }
 
@@ -1946,6 +2232,531 @@ function writeFile(path, content) {
     mtime: RECENT_LS_MTIME
   };
   addChild(path);
+}
+
+function isPrivilegedCommand() {
+  return state.user === "root" || privilegedCommandDepth > 0;
+}
+
+function requirePrivilege(commandName) {
+  if (!isPrivilegedCommand()) throw new Error(`${commandName}: Permission denied`);
+}
+
+function getFileLines(path) {
+  const node = state.fs[path];
+  if (!node || node.type !== "file") return [];
+  return node.content.split("\n").filter(Boolean);
+}
+
+function setFileLines(path, lines) {
+  writeFile(path, lines.length ? `${lines.join("\n")}\n` : "");
+}
+
+function appendFileLine(path, line) {
+  const lines = getFileLines(path);
+  lines.push(line);
+  setFileLines(path, lines);
+}
+
+function removeFileLines(path, predicate) {
+  setFileLines(path, getFileLines(path).filter((line) => !predicate(line)));
+}
+
+function parsePasswdLine(line) {
+  const [name, password, uid, gid, gecos, home, shell] = line.split(":");
+  if (!name) return null;
+  return {
+    name,
+    password,
+    uid: Number.parseInt(uid, 10),
+    gid: Number.parseInt(gid, 10),
+    gecos,
+    home,
+    shell
+  };
+}
+
+function parseGroupLine(line) {
+  const [name, password, gid, members = ""] = line.split(":");
+  if (!name) return null;
+  return {
+    name,
+    password,
+    gid: Number.parseInt(gid, 10),
+    members: members.split(",").filter(Boolean)
+  };
+}
+
+function parseShadowLine(line) {
+  const [name, password] = line.split(":");
+  if (!name) return null;
+  return { name, password };
+}
+
+function getPasswdEntries() {
+  return getFileLines("/etc/passwd").map(parsePasswdLine).filter(Boolean);
+}
+
+function getGroupEntries() {
+  return getFileLines("/etc/group").map(parseGroupLine).filter(Boolean);
+}
+
+function getShadowEntries() {
+  return getFileLines("/etc/shadow").map(parseShadowLine).filter(Boolean);
+}
+
+function getUserEntry(username) {
+  return getPasswdEntries().find((entry) => entry.name === username) || null;
+}
+
+function getGroupEntryByGid(gid) {
+  return getGroupEntries().find((entry) => entry.gid === gid) || null;
+}
+
+function getGroupEntry(groupname) {
+  return getGroupEntries().find((entry) => entry.name === groupname) || null;
+}
+
+function getShadowEntry(username) {
+  return getShadowEntries().find((entry) => entry.name === username) || null;
+}
+
+function userExists(username) {
+  return !!getUserEntry(username);
+}
+
+function groupExists(groupname) {
+  return !!getGroupEntry(groupname);
+}
+
+function userIsInGroup(username, groupname) {
+  const group = getGroupEntry(groupname);
+  return !!group && group.members.includes(username);
+}
+
+function passwordIsSet(username) {
+  const entry = getShadowEntry(username);
+  return !!entry && entry.password !== SHADOW_LOCKED_PASSWORD && entry.password !== "*" && entry.password !== "";
+}
+
+function setUserPassword(username, password) {
+  state.userPasswords = {
+    ...(state.userPasswords || {}),
+    [username]: password
+  };
+}
+
+function getUserPassword(username) {
+  if (username === "root") return "";
+  return state.userPasswords?.[username] || "";
+}
+
+function userCanUseSudo(username) {
+  return username === "root" || userIsInGroup(username, "wheel") || userIsInGroup(username, "sudo");
+}
+
+function packageInstalled(packageName) {
+  return (state.installedPackages || []).includes(packageName);
+}
+
+function markPackageInstalled(packageName) {
+  if (!state.installedPackages) state.installedPackages = [];
+  if (!state.installedPackages.includes(packageName)) state.installedPackages.push(packageName);
+}
+
+function showSudoLectureIfNeeded(username) {
+  if (!state.sudoLectureShownUsers) state.sudoLectureShownUsers = [];
+  if (state.sudoLectureShownUsers.includes(username)) return;
+  printBlock([
+    "We trust you have received the usual lecture from the local System",
+    "Administrator. It usually boils down to these three things:",
+    "",
+    "    #1) Respect the privacy of others.",
+    "    #2) Think before you type.",
+    "    #3) With great power comes great responsibility.",
+    ""
+  ].join("\n"), "system");
+  state.sudoLectureShownUsers.push(username);
+}
+
+function ensureValidName(name, commandName, label = "name") {
+  if (!name) throw new Error(`${commandName}: missing ${label}`);
+  if (!/^[a-z_][a-z0-9_-]*[$]?$/.test(name)) {
+    throw new Error(`${commandName}: invalid ${label} '${name}'`);
+  }
+}
+
+function ensureValidUsername(username, commandName) {
+  ensureValidName(username, commandName, "user name");
+}
+
+function ensureValidGroupname(groupname, commandName) {
+  ensureValidName(groupname, commandName, "group name");
+}
+
+function formatGroupLine(group) {
+  return `${group.name}:${group.password || "x"}:${group.gid}:${group.members.join(",")}`;
+}
+
+function setGroupEntries(groups) {
+  setFileLines("/etc/group", groups.map(formatGroupLine));
+}
+
+function getNextGroupIdFromGroups() {
+  return Math.max(...getGroupEntries().map((entry) => entry.gid), 999) + 1;
+}
+
+function updateGroupMembers(groupname, updater) {
+  let found = false;
+  const groups = getGroupEntries().map((group) => {
+    if (group.name !== groupname) return group;
+    found = true;
+    return {
+      ...group,
+      members: [...new Set(updater([...group.members]))]
+    };
+  });
+  if (!found) throw new Error(`group '${groupname}' does not exist`);
+  setGroupEntries(groups);
+}
+
+function addUserToSupplementalGroup(username, groupname) {
+  updateGroupMembers(groupname, (members) => members.includes(username) ? members : [...members, username]);
+}
+
+function replaceSupplementalGroups(username, groupNames) {
+  const targetGroups = new Set(groupNames);
+  const groups = getGroupEntries().map((group) => ({
+    ...group,
+    members: targetGroups.has(group.name)
+      ? [...new Set([...group.members, username])]
+      : group.members.filter((member) => member !== username)
+  }));
+  setGroupEntries(groups);
+}
+
+function removeUserFromAllSupplementalGroups(username) {
+  const groups = getGroupEntries().map((group) => ({
+    ...group,
+    members: group.members.filter((member) => member !== username)
+  }));
+  setGroupEntries(groups);
+}
+
+function parseGroupList(value) {
+  return String(value || "").split(",").map((group) => group.trim()).filter(Boolean);
+}
+
+function ensureGroupsExist(groupNames, commandName) {
+  groupNames.forEach((groupname) => {
+    ensureValidGroupname(groupname, commandName);
+    if (!getGroupEntry(groupname)) throw new Error(`${commandName}: group '${groupname}' does not exist`);
+  });
+}
+
+function getNextIdFromPasswd() {
+  return Math.max(...getPasswdEntries().map((entry) => entry.uid), 999) + 1;
+}
+
+function createHomeDirectory(username) {
+  const homePath = `/home/${username}`;
+  if (!state.fs[homePath]) {
+    state.fs[homePath] = createDirNode([], { owner: username, group: username, mtime: RECENT_LS_MTIME });
+    addChild(homePath);
+  }
+  return homePath;
+}
+
+function createMailbox(username) {
+  const mailPath = `/var/mail/${username}`;
+  if (!state.fs[mailPath]) {
+    state.fs[mailPath] = createFileNode("", {
+      owner: username,
+      group: "mail",
+      mode: "-rw-rw----",
+      mtime: RECENT_LS_MTIME
+    });
+    addChild(mailPath);
+  }
+  return mailPath;
+}
+
+function setShadowPassword(username, passwordHash) {
+  const lines = getFileLines("/etc/shadow").map((line) => {
+    const fields = line.split(":");
+    if (fields[0] !== username) return line;
+    fields[1] = passwordHash;
+    return fields.join(":");
+  });
+  setFileLines("/etc/shadow", lines);
+}
+
+function executePrivilegedCommand(parsed) {
+  privilegedCommandDepth += 1;
+  try {
+    return executeBuiltin(parsed);
+  } finally {
+    privilegedCommandDepth -= 1;
+  }
+}
+
+function validateSudoTarget(parsed) {
+  if (!parsed.command) throw new Error("sudo: a command is required");
+  if (parsed.command === "sudo") throw new Error("sudo: nested sudo is not supported");
+  if (!commandCatalog.includes(parsed.command)) throw new Error(`${parsed.raw}: command not found`);
+  if (!allowedCommands.has(parsed.command)) throw new Error(`このシナリオでは ${parsed.command} は練習対象外です`);
+}
+
+function runSudo(args) {
+  const parsed = {
+    command: args[0] || "",
+    args: args.slice(1),
+    raw: normalizeSpaces(args.join(" "))
+  };
+  validateSudoTarget(parsed);
+  requireLogin(parsed.command);
+  state.lastSudoDenied = false;
+
+  if (state.user === "root") {
+    return executePrivilegedCommand(parsed);
+  }
+
+  if (sudoAuthenticated && userCanUseSudo(state.user)) {
+    return executePrivilegedCommand(parsed);
+  }
+
+  showSudoLectureIfNeeded(state.user);
+  pendingSudoCommand = {
+    parsed,
+    before: snapshotState(),
+    user: state.user
+  };
+  printLine(`[sudo] password for ${state.user}:`, "system");
+}
+
+function completeSudoPassword(input) {
+  const pending = pendingSudoCommand;
+  if (!pending) return null;
+  const sudoUser = pending.user || state.user;
+  if (input !== getUserPassword(sudoUser)) {
+    printLine("Sorry, try again.", "error");
+    lastCommandResult = { stdout: "", stderr: "Sorry, try again.\n" };
+    return null;
+  }
+
+  pendingSudoCommand = null;
+  if (!userCanUseSudo(sudoUser)) {
+    const message = `${sudoUser} is not in the sudoers file. This incident will be reported.`;
+    state.lastSudoDenied = true;
+    sudoAuthenticated = false;
+    printLine(message, "error");
+    lastCommandResult = { stdout: "", stderr: `${message}\n` };
+    return {
+      taskInput: input,
+      taskParsed: { command: "sudo-password", args: [], raw: input },
+      before: pending.before
+    };
+  }
+
+  sudoAuthenticated = true;
+  state.lastSudoDenied = false;
+  const previousCapture = commandOutputCapture;
+  commandOutputCapture = { stdout: "", stderr: "" };
+  try {
+    executePrivilegedCommand(pending.parsed);
+    lastCommandResult = commandOutputCapture;
+  } finally {
+    commandOutputCapture = previousCapture;
+  }
+  return {
+    taskInput: input,
+    taskParsed: { command: "sudo-password", args: [], raw: input },
+    before: pending.before
+  };
+}
+
+function switchUser(username) {
+  state.userStack = state.userStack || [];
+  state.userStack.push({ user: state.user, cwd: state.cwd });
+  state.user = username;
+  state.cwd = homeForUser(username);
+  resetPrivilegeAuthState();
+}
+
+function runSu(args) {
+  const username = args[0] || "root";
+  ensureValidUsername(username, "su");
+  if (!getUserEntry(username)) throw new Error(`su: user ${username} does not exist`);
+  if (state.user !== "root") throw new Error("su: Authentication failure");
+  switchUser(username);
+}
+
+function runDnf(args) {
+  requirePrivilege("dnf");
+  const action = args[0];
+  const packageName = args[1];
+  if (action !== "install" || !packageName) {
+    throw new Error("dnf: only 'dnf install <package>' is supported");
+  }
+  if (packageName !== "tree") {
+    throw new Error(`dnf: No match for argument: ${packageName}`);
+  }
+  if (packageInstalled(packageName)) {
+    printLine(`Package ${packageName} is already installed.`);
+    return;
+  }
+  markPackageInstalled(packageName);
+  printBlock([
+    "Dependencies resolved.",
+    "Installed:",
+    `  ${packageName}`,
+    "Complete!"
+  ].join("\n"));
+}
+
+function runUseradd(args) {
+  requirePrivilege("useradd");
+  const { options, values } = splitOptions(args);
+  const username = values[0];
+  ensureValidUsername(username, "useradd");
+  if (getUserEntry(username)) throw new Error(`useradd: user '${username}' already exists`);
+
+  const uid = getNextIdFromPasswd();
+  const gid = uid;
+  const homePath = `/home/${username}`;
+  appendFileLine("/etc/passwd", `${username}:x:${uid}:${gid}::${homePath}:/bin/bash`);
+  appendFileLine("/etc/shadow", `${username}:${SHADOW_LOCKED_PASSWORD}:${PASSWD_DATE_FIELD}:0:99999:7:::`);
+  appendFileLine("/etc/group", `${username}:x:${gid}:`);
+  if (hasFlag(options, "m")) createHomeDirectory(username);
+  createMailbox(username);
+}
+
+function runPasswd(args) {
+  const username = args[0] || state.user;
+  ensureValidUsername(username, "passwd");
+  if (!getUserEntry(username)) throw new Error(`passwd: user '${username}' does not exist`);
+  if (username !== state.user && !isPrivilegedCommand()) throw new Error("passwd: Permission denied");
+  pendingPasswdChange = {
+    username,
+    stage: "new",
+    newPassword: ""
+  };
+  printLine("New password:", "system");
+}
+
+function completePasswdInput(input) {
+  const pending = pendingPasswdChange;
+  if (!pending) return null;
+  const before = snapshotState();
+
+  if (pending.stage === "new") {
+    pendingPasswdChange = {
+      ...pending,
+      stage: "retype",
+      newPassword: input
+    };
+    printLine("Retype new password:", "system");
+    return {
+      taskInput: input,
+      taskParsed: { command: "passwd-new-password", args: [], raw: input },
+      before
+    };
+  }
+
+  pendingPasswdChange = null;
+  if (input !== pending.newPassword) {
+    printLine("Sorry, passwords do not match.", "error");
+    printLine("passwd: Authentication token manipulation error", "error");
+    return {
+      taskInput: input,
+      taskParsed: { command: "passwd-retype", args: [], raw: input },
+      before
+    };
+  }
+
+  setShadowPassword(pending.username, SHADOW_PASSWORD_HASH);
+  setUserPassword(pending.username, pending.newPassword);
+  printLine("passwd: password updated successfully", "success");
+  return {
+    taskInput: input,
+    taskParsed: { command: "passwd-retype", args: [], raw: input },
+    before
+  };
+}
+
+function runUserdel(args) {
+  requirePrivilege("userdel");
+  const { options, values } = splitOptions(args);
+  const username = values[0];
+  ensureValidUsername(username, "userdel");
+  const entry = getUserEntry(username);
+  if (!entry) throw new Error(`userdel: user '${username}' does not exist`);
+
+  removeFileLines("/etc/passwd", (line) => line.split(":")[0] === username);
+  removeFileLines("/etc/shadow", (line) => line.split(":")[0] === username);
+  removeFileLines("/etc/group", (line) => line.split(":")[0] === username);
+  removeUserFromAllSupplementalGroups(username);
+
+  if (hasFlag(options, "r")) {
+    if (entry.home && state.fs[entry.home]) removePathRecursive(entry.home, true, true);
+    const mailbox = `/var/mail/${username}`;
+    if (state.fs[mailbox]) removePathRecursive(mailbox, false, true);
+  }
+}
+
+function runGroupadd(args) {
+  requirePrivilege("groupadd");
+  const { values } = splitOptions(args);
+  const groupname = values[0];
+  ensureValidGroupname(groupname, "groupadd");
+  if (getGroupEntry(groupname)) throw new Error(`groupadd: group '${groupname}' already exists`);
+  appendFileLine("/etc/group", `${groupname}:x:${getNextGroupIdFromGroups()}:`);
+}
+
+function runGroupdel(args) {
+  requirePrivilege("groupdel");
+  const { values } = splitOptions(args);
+  const groupname = values[0];
+  ensureValidGroupname(groupname, "groupdel");
+  const group = getGroupEntry(groupname);
+  if (!group) throw new Error(`groupdel: group '${groupname}' does not exist`);
+  if (getPasswdEntries().some((entry) => entry.gid === group.gid)) {
+    throw new Error(`groupdel: cannot remove the primary group of user '${groupname}'`);
+  }
+  removeFileLines("/etc/group", (line) => line.split(":")[0] === groupname);
+}
+
+function runUsermod(args) {
+  requirePrivilege("usermod");
+  const { options, values } = splitOptions(args);
+  const username = values[values.length - 1];
+  ensureValidUsername(username, "usermod");
+  if (!getUserEntry(username)) throw new Error(`usermod: user '${username}' does not exist`);
+
+  const appendMode = options.includes("-aG") || (options.includes("-a") && options.includes("-G"));
+  const replaceMode = !appendMode && options.includes("-G");
+  if (!appendMode && !replaceMode) throw new Error("usermod: only -aG and -G are supported");
+  const groupList = parseGroupList(values[0]);
+  if (groupList.length === 0) throw new Error("usermod: group list is required");
+  ensureGroupsExist(groupList, "usermod");
+
+  if (appendMode) {
+    groupList.forEach((groupname) => addUserToSupplementalGroup(username, groupname));
+    return;
+  }
+  replaceSupplementalGroups(username, groupList);
+}
+
+function runId(args) {
+  const username = args[0] || state.user;
+  const entry = getUserEntry(username);
+  if (!entry) throw new Error(`id: '${username}': no such user`);
+  const primaryGroup = getGroupEntryByGid(entry.gid) || { name: username, gid: entry.gid };
+  const supplementalGroupParts = getGroupEntries()
+    .filter((group) => group.gid !== entry.gid && group.members.includes(username))
+    .map((group) => `${group.gid}(${group.name})`);
+  const uniqueGroupParts = [...new Set([`${entry.gid}(${primaryGroup.name})`, ...supplementalGroupParts])];
+  printLine(`uid=${entry.uid}(${entry.name}) gid=${entry.gid}(${primaryGroup.name}) groups=${uniqueGroupParts.join(",")}`);
 }
 
 function cloneNodeForCopy(source) {
@@ -2359,6 +3170,7 @@ function executeBuiltin(parsed) {
     case "more": return runMore(args);
     case "mkdir": return runMkdir(args);
     case "touch": return runTouch(args);
+    case "chmod": return runChmod(args);
     case "rm": return runRm(args);
     case "cp": return runCp(args);
     case "mv": return runMv(args);
@@ -2372,6 +3184,16 @@ function executeBuiltin(parsed) {
     case "sed": return runSed(args);
     case "awk": return runAwk(args);
     case "tee": return runTee(args);
+    case "sudo": return runSudo(args);
+    case "su": return runSu(args);
+    case "dnf": return runDnf(args);
+    case "useradd": return runUseradd(args);
+    case "passwd": return runPasswd(args);
+    case "userdel": return runUserdel(args);
+    case "id": return runId(args);
+    case "groupadd": return runGroupadd(args);
+    case "groupdel": return runGroupdel(args);
+    case "usermod": return runUsermod(args);
     case "whoami": return printLine(state.user);
     case "hostname": return printLine(state.host);
     case "exit": return runExit();
@@ -2486,7 +3308,9 @@ function setScenario(key) {
   activeScenarioKey = key;
   allowedCommands = new Set(scenario.allowed);
   clearMorePaging();
-  if (activeRuntimeName === "main" && mainScenarioStartsLoggedOut(key)) {
+  if (scenario.initialUser) {
+    ensureUserSession(scenario.initialUser);
+  } else if (activeRuntimeName === "main" && mainScenarioStartsLoggedOut(key)) {
     ensureGuestSession();
   } else if (scenarioStartsLoggedOut(scenario)) {
     ensureGuestSession();
@@ -2526,13 +3350,15 @@ function validateExpect(expect, parsed, before) {
     case "password":
       return state.loggedIn && state.user === "student" && state.host === "linux-practice";
     case "cd": {
-      const target = normalizePath(parsed.args[0] || "/home/student", before.cwd);
+      const target = normalizePath(parsed.args[0] || "~", before.cwd, before.user);
       return state.cwd === target && nodeMatches(target, "dir");
     }
     case "mkdir":
       return parsed.args.every((arg) => nodeMatches(normalizePath(arg, before.cwd), "dir"));
     case "touch":
       return parsed.args.every((arg) => nodeMatches(normalizePath(arg, before.cwd), "file"));
+    case "chmod":
+      return parsed.args.slice(1).every((arg) => nodeMatches(normalizePath(arg, before.cwd, before.user)));
     case "echo": {
       const redirectIndex = parsed.args.indexOf(">");
       if (redirectIndex < 0) return true;
@@ -2575,6 +3401,7 @@ function normalizeCommandForComparison(commandText, base = state.cwd) {
     cat: [0],
     mkdir: [0],
     touch: [0],
+    chmod: [1],
     rm: [0],
     cp: [0, 1],
     mv: [0, 1],
@@ -2606,6 +3433,7 @@ function normalizeCommandForComparison(commandText, base = state.cwd) {
     more: values.map((_, index) => index),
     mkdir: values.map((_, index) => index),
     touch: values.map((_, index) => index),
+    chmod: values.length > 1 ? values.slice(1).map((_, index) => index + 1) : [],
     rm: values.map((_, index) => index),
     cp: [0, 1],
     mv: [0, 1],
@@ -2634,6 +3462,28 @@ function taskIsSatisfied(task, input, parsed, before) {
   return validateExpect(task.expect || {}, parsed, before);
 }
 
+function expectValueList(value) {
+  return Array.isArray(value) ? value : [value];
+}
+
+function expectGroupRelationSatisfied(value, shouldBeInGroup) {
+  return expectValueList(value).every((entry) => {
+    const username = entry?.user;
+    const groups = Array.isArray(entry?.groups) ? entry.groups : [entry?.group].filter(Boolean);
+    if (!username || groups.length === 0) return false;
+    return groups.every((groupname) => userIsInGroup(username, groupname) === shouldBeInGroup);
+  });
+}
+
+function expectFileModeSatisfied(value) {
+  return expectValueList(value).every((entry) => {
+    const path = entry?.path || entry?.file;
+    const mode = entry?.mode;
+    if (!path || !mode) return false;
+    return state.fs[path]?.mode === mode;
+  });
+}
+
 function validateExpectForExtendedCommands(expect, parsed, before) {
   if (expect.loggedIn !== undefined && state.loggedIn !== expect.loggedIn) return false;
   if (expect.user && state.user !== expect.user) return false;
@@ -2641,8 +3491,21 @@ function validateExpectForExtendedCommands(expect, parsed, before) {
   if (expect.cwd && state.cwd !== expect.cwd) return false;
   if (expect.pendingPassword && pendingPasswordFor !== SSH_TARGET) return false;
   if (expect.pendingHostKeyConfirmation && pendingHostKeyFor !== SSH_TARGET) return false;
-  if (expect.exists && !nodeMatches(expect.exists, expect.type)) return false;
-  if (expect.notExists && state.fs[expect.notExists]) return false;
+  if (expect.pendingSudoPassword && !isAwaitingSudoPassword()) return false;
+  if (expect.pendingPasswdNewPassword && !isAwaitingPasswdNewPassword()) return false;
+  if (expect.pendingPasswdRetype && !isAwaitingPasswdRetype()) return false;
+  if (expect.exists && !expectValueList(expect.exists).every((path) => nodeMatches(path, expect.type))) return false;
+  if (expect.notExists && expectValueList(expect.notExists).some((path) => state.fs[path])) return false;
+  if (expect.fileMode && !expectFileModeSatisfied(expect.fileMode)) return false;
+  if (expect.userExists && !expectValueList(expect.userExists).every((username) => userExists(username))) return false;
+  if (expect.userMissing && !expectValueList(expect.userMissing).every((username) => !userExists(username))) return false;
+  if (expect.groupExists && !expectValueList(expect.groupExists).every((groupname) => groupExists(groupname))) return false;
+  if (expect.groupMissing && !expectValueList(expect.groupMissing).every((groupname) => !groupExists(groupname))) return false;
+  if (expect.userInGroups && !expectGroupRelationSatisfied(expect.userInGroups, true)) return false;
+  if (expect.userNotInGroups && !expectGroupRelationSatisfied(expect.userNotInGroups, false)) return false;
+  if (expect.passwordSet && !expectValueList(expect.passwordSet).every((username) => passwordIsSet(username))) return false;
+  if (expect.sudoDenied !== undefined && state.lastSudoDenied !== expect.sudoDenied) return false;
+  if (expect.packageInstalled && !expectValueList(expect.packageInstalled).every((packageName) => packageInstalled(packageName))) return false;
   if (expect.file) {
     const node = state.fs[expect.file];
     if (!node || node.type !== "file") return false;
@@ -2657,9 +3520,23 @@ function validateExpectForExtendedCommands(expect, parsed, before) {
     case "ssh": return pendingHostKeyFor === SSH_TARGET || pendingPasswordFor === SSH_TARGET;
     case "response": return pendingPasswordFor === SSH_TARGET;
     case "password": return state.loggedIn && state.user === "student" && state.host === "linux-practice";
-    case "cd": return state.cwd === normalizePath(values[0] || "/home/student", before.cwd);
+    case "sudo": return isAwaitingSudoPassword() || sudoAuthenticated;
+    case "sudo-password": return sudoAuthenticated;
+    case "su": return userExists(state.user);
+    case "dnf": return values[1] ? packageInstalled(values[1]) : true;
+    case "passwd": return isAwaitingPasswdInput();
+    case "passwd-new-password": return isAwaitingPasswdRetype();
+    case "passwd-retype": return true;
+    case "useradd": return values.every((arg) => arg.startsWith("-") || userExists(arg));
+    case "userdel": return values.every((arg) => arg.startsWith("-") || !userExists(arg));
+    case "id": return userExists(values[0] || state.user);
+    case "groupadd": return values.every((arg) => groupExists(arg));
+    case "groupdel": return values.every((arg) => !groupExists(arg));
+    case "usermod": return userExists(values[values.length - 1]);
+    case "cd": return state.cwd === normalizePath(values[0] || "~", before.cwd, before.user);
     case "mkdir": return values.every((arg) => nodeMatches(normalizePath(arg, before.cwd), "dir"));
     case "touch": return values.every((arg) => nodeMatches(normalizePath(arg, before.cwd), "file"));
+    case "chmod": return values.slice(1).every((arg) => nodeMatches(normalizePath(arg, before.cwd, before.user)));
     case "echo": {
       const redirectIndex = parsed.args.indexOf(">");
       if (redirectIndex < 0) return true;
@@ -2746,6 +3623,16 @@ function submitCurrentCommand() {
       handleHostKeyConfirmation(input);
     } else if (isAwaitingPassword()) {
       completePassword(input);
+    } else if (isAwaitingSudoPassword()) {
+      const pending = completeSudoPassword(input);
+      if (pending) {
+        markTasks(pending.taskInput, pending.taskParsed, pending.before);
+      }
+    } else if (isAwaitingPasswdInput()) {
+      const pending = completePasswdInput(input);
+      if (pending) {
+        markTasks(pending.taskInput, pending.taskParsed, pending.before);
+      }
     } else if (isAwaitingRmConfirmation()) {
       const pending = completeRmConfirmation(input);
       if (pending?.taskInput && ["y", "yes"].includes(input.toLowerCase())) {
@@ -2767,7 +3654,7 @@ function submitCurrentCommand() {
         pendingRmConfirmation.before = before;
       }
       markTasks(parsed.raw, parsed, before);
-      if (parsed.command === "exit" && getScenarioStore().login) setScenario("login");
+      if (parsed.command === "exit" && !state.loggedIn && getScenarioStore().login) setScenario("login");
     }
   } catch (error) {
     printLine(error.message, "error");
@@ -2814,7 +3701,7 @@ function replaceCurrentToken(input, replacement) {
 }
 
 function completeCommandInput() {
-  if (isInSshDialogue()) return;
+  if (isAwaitingInteractiveInput()) return;
 
   const { commandInput: inputElement } = getRuntimeElements();
   const input = inputElement.value;
@@ -2970,6 +3857,7 @@ nextScenarioButton.addEventListener("click", () => {
 resetButton.addEventListener("click", () => {
   state = createInitialState();
   resetSshAuthState();
+  resetPrivilegeAuthState();
   clearMorePaging();
   pendingRmConfirmation = null;
   knownHosts.clear();
